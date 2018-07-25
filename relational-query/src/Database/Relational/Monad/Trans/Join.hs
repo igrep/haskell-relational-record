@@ -63,7 +63,7 @@ updateContext :: Monad m => (JoinContext -> JoinContext) -> QueryJoin m ()
 updateContext =  QueryJoin . modify
 
 -- | Add last join product restriction.
-updateJoinRestriction :: Monad m => Predicate Flat -> QueryJoin m ()
+updateJoinRestriction :: Monad m => Predicate i j Flat -> QueryJoin m ()
 updateJoinRestriction e = updateContext (updateProduct d)  where
   d  Nothing  = error "on: Product is empty! Restrict target product is not found!"
   d (Just pt) = restrictProduct pt e
@@ -82,9 +82,9 @@ instance MonadQuery (QueryJoin ConfigureQuery) where
 
 -- | Unsafely join sub-query with this query.
 unsafeSubQueryWithAttr :: Monad q
-                       => NodeAttr                 -- ^ Attribute maybe or just
-                       -> Qualified SubQuery       -- ^ 'SubQuery' to join
-                       -> QueryJoin q (Record c r) -- ^ Result joined context and record of 'SubQuery' result.
+                       => NodeAttr                   -- ^ Attribute maybe or just
+                       -> Qualified (SubQuery i j)     -- ^ 'SubQuery' to join
+                       -> QueryJoin q (Record i j c r) -- ^ Result joined context and record of 'SubQuery' result.
 unsafeSubQueryWithAttr attr qsub = do
   updateContext (updateProduct (`growProduct` (attr, qsub)))
   return $ Record.unsafeFromQualifiedSubQuery qsub
@@ -92,7 +92,7 @@ unsafeSubQueryWithAttr attr qsub = do
 -- | Basic monadic join operation using 'MonadQuery'.
 queryWithAttr :: NodeAttr
               -> Relation p r
-              -> QueryJoin ConfigureQuery (PlaceHolders p, Record c r)
+              -> QueryJoin ConfigureQuery (PlaceHolders p, Record i j c r)
 queryWithAttr attr = unsafeAddPlaceHolders . run where
   run rel = do
     q <- liftQualify $ do

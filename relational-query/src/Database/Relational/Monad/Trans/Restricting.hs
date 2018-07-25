@@ -20,6 +20,8 @@ module Database.Relational.Monad.Trans.Restricting (
   extractRestrict
   ) where
 
+import Control.Monad.Indexed
+import Control.Monad.Indexed.Trans
 import Control.Monad.Trans.Class (MonadTrans (lift))
 import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
 import Control.Applicative (Applicative, pure, (<$>))
@@ -32,23 +34,36 @@ import Database.Relational.Monad.Class
   (MonadQualify (..), MonadRestrict(..), MonadQuery (..), MonadAggregate(..))
 
 
+-- igrep NOTE: Convert this into IxMonad or else?
+
 -- | Type to accumulate query restrictions.
 --   Type 'c' is context tag of restriction building like
 --   Flat (where) or Aggregated (having).
 newtype Restrictings c m a =
-  Restrictings (WriterT (DList (Predicate c)) m a)
-  deriving (MonadTrans, Monad, Functor, Applicative)
+  Restrictings (WriterT (DList (Predicate i j c)) m a)
+
+instance IxFunctor (Restrictings c m) where
+  imap = undefined
+
+instance IxPointed (Restrictings c m) where
+  ireturn = undefined
+
+instance IxApplicative (Restrictings c m) where
+  iap = undefined
+
+instance IxMonadTrans (Restrictings c) where
+  ilift = undefined
 
 -- | Lift to 'Restrictings'
 restrictings :: Monad m => m a -> Restrictings c m a
-restrictings =  lift
+restrictings =  ilift
 
 -- | Add whole query restriction.
-updateRestriction :: Monad m => Predicate c -> Restrictings c m ()
+updateRestriction :: Monad m => Predicate i j c -> Restrictings c m ()
 updateRestriction =  Restrictings . tell . pure
 
 -- | 'MonadRestrict' instance.
-instance (Monad q, Functor q) => MonadRestrict c (Restrictings c q) where
+instance (Monad q, Functor q) => MonadRestrict c (Restrictings c q) i j where
   restrict = updateRestriction
 
 -- | Restricted 'MonadQualify' instance.
@@ -68,5 +83,5 @@ instance MonadAggregate m => MonadAggregate (Restrictings c m) where
   groupBy' = restrictings . groupBy'
 
 -- | Run 'Restrictings' to get 'QueryRestriction'
-extractRestrict :: (Monad m, Functor m) => Restrictings c m a -> m (a, [Predicate c])
+extractRestrict :: (Monad m, Functor m) => Restrictings c m a -> m (a, [Predicate i j c])
 extractRestrict (Restrictings rc) = second toList <$> runWriterT rc

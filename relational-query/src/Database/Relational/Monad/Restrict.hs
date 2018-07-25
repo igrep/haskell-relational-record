@@ -35,12 +35,12 @@ type Restrict = Restrictings Flat ConfigureQuery
 -- | RestrictedStatement type synonym.
 --   Record type 'r' must be
 --   the same as 'Restrictings' type parameter 'r'.
-type RestrictedStatement r a = Record Flat r -> Restrict a
+type RestrictedStatement r a = Record i j Flat r -> Restrict a
 
 -- -- | 'return' of 'Restrict'
 -- restricted :: a -> Restrict a
 -- restricted =  restrict . Identity
 
 -- | Run 'Restrict' to get 'QueryRestriction'.
-extract :: Restrict a -> Config -> (a, [Predicate Flat])
+extract :: Restrict a -> Config -> (a, [Predicate i j Flat])
 extract =  configureQuery . extractRestrict

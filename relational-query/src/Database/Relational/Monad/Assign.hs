@@ -37,12 +37,12 @@ type Assign r = Assignings r Restrict
 --   Specifying assignments and restrictions like update statement.
 --   Record type must be
 --   the same as 'Target' type parameter 'r'.
-type AssignStatement r a = Record Flat r -> Assign r a
+type AssignStatement r a = Record i j Flat r -> Assign r a
 
 -- -- | 'return' of 'Update'
 -- updateStatement :: a -> Assignings r (Restrictings Identity) a
 -- updateStatement =  assignings . restrictings . Identity
 
 -- | Run 'Assign'.
-extract :: Assign r a -> Config -> ((a, Table r -> [Assignment]), [Predicate Flat])
+extract :: Assign r a -> Config -> ((a, Table r -> [Assignment]), [Predicate i j Flat])
 extract =  Restrict.extract . extractAssignments

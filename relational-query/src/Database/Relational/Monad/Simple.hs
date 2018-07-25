@@ -49,7 +49,7 @@ simple :: ConfigureQuery a -> QuerySimple a
 simple =  orderings . restrictings . join'
 
 extract :: SimpleQuery p r
-        -> ConfigureQuery (((((PlaceHolders p, Record Flat r), [OrderingTerm]), [Predicate Flat]),
+        -> ConfigureQuery (((((PlaceHolders p, Record i j Flat r), [OrderingTerm]), [Predicate i j Flat]),
                            JoinProduct), Duplication)
 extract =  extractCore . extractOrderingTerms
 

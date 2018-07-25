@@ -30,8 +30,8 @@ type QueryCore = Restrictings Flat (QueryJoin ConfigureQuery)
 
 -- | Extract 'QueryCore' computation.
 extractCore :: QueryCore a
-            -> ConfigureQuery (((a, [Predicate Flat]), JoinProduct), Duplication)
+            -> ConfigureQuery (((a, [Predicate i j Flat]), JoinProduct), Duplication)
 extractCore =  extractProduct . extractRestrict
 
 -- | OrderedQuery monad type with placeholder type 'p'. Record must be the same as 'Orderings' context type parameter 'c'.
-type OrderedQuery c m p r = Orderings c m (PlaceHolders p, Record c r)
+type OrderedQuery c m p r = Orderings c m (PlaceHolders p, Record i j c r)

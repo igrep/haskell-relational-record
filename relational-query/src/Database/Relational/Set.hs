@@ -46,11 +46,11 @@ import Database.Relational.Relation (relation', relation, query, queryMaybe, )
 --            relX `inner` relY `on'` [ \x y -> ... ] -- this lambda form has JoinRestriction type
 --      ...
 -- @
-type JoinRestriction a b = Record Flat a -> Record Flat b -> Predicate Flat
+type JoinRestriction a b = Record i j Flat a -> Record i j Flat b -> Predicate i j Flat
 
 -- | Basic direct join operation with place-holder parameters.
-join' :: (qa -> QuerySimple (PlaceHolders pa, Record Flat a))
-      -> (qb -> QuerySimple (PlaceHolders pb, Record Flat b))
+join' :: (qa -> QuerySimple (PlaceHolders pa, Record i j Flat a))
+      -> (qb -> QuerySimple (PlaceHolders pb, Record i j Flat b))
       -> qa
       -> qb
       -> [JoinRestriction a b]
@@ -90,8 +90,8 @@ full' :: Relation pa a                         -- ^ Left query to join
 full'  =  join' queryMaybe' queryMaybe'
 
 -- | Basic direct join operation.
-join_ :: (qa -> QuerySimple (Record Flat a))
-      -> (qb -> QuerySimple (Record Flat b))
+join_ :: (qa -> QuerySimple (Record i j Flat a))
+      -> (qb -> QuerySimple (Record i j Flat b))
       -> qa
       -> qb
       -> [JoinRestriction a b]

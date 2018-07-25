@@ -25,21 +25,21 @@ import qualified Database.Relational.SqlSyntax as Product
 
 
 -- | JoinContext type for QueryJoin.
-newtype JoinContext =
+newtype JoinContext i j =
   JoinContext
-  { product  :: Maybe (Node (DList (Predicate Flat)))
+  { product  :: Maybe (Node i j (DList (Predicate i j Flat)))
   }
 
 -- | Initial 'JoinContext'.
-primeJoinContext :: JoinContext
+primeJoinContext :: JoinContext i j
 primeJoinContext =  JoinContext Nothing
 
 -- | Update product of 'JoinContext'.
-updateProduct :: (Maybe (Node (DList (Predicate Flat))) -> Node (DList (Predicate Flat)))
-              -> JoinContext
-              -> JoinContext
+updateProduct :: (Maybe (Node i j (DList (Predicate i j Flat))) -> Node i j (DList (Predicate i j Flat)))
+              -> JoinContext i j
+              -> JoinContext i j
 updateProduct uf ctx = ctx { product = Just . uf . product $ ctx }
 
 -- |  Finalize context to extract accumulated query product.
-joinProduct :: JoinContext -> JoinProduct
+joinProduct :: JoinContext i j -> JoinProduct i j
 joinProduct =  fmap (fmap toList . Product.nodeTree) . product

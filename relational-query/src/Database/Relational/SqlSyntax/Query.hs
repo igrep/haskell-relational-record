@@ -25,46 +25,46 @@ import Database.Relational.SqlSyntax.Types
 
 -- | Unsafely generate flat 'SubQuery' from untyped components.
 flatSubQuery :: Config
-             -> Tuple
+             -> Tuple i j
              -> Duplication
-             -> JoinProduct
-             -> [Predicate Flat]
-             -> [OrderingTerm]
-             -> SubQuery
+             -> JoinProduct i j
+             -> [Predicate i j Flat]
+             -> [OrderingTerm i j]
+             -> SubQuery i j
 flatSubQuery = Flat
 
 -- | Unsafely generate aggregated 'SubQuery' from untyped components.
 aggregatedSubQuery :: Config
-                   -> Tuple
+                   -> Tuple i j
                    -> Duplication
-                   -> JoinProduct
-                   -> [Predicate Flat]
-                   -> [AggregateElem]
-                   -> [Predicate Aggregated]
-                   -> [OrderingTerm]
-                   -> SubQuery
+                   -> JoinProduct i j
+                   -> [Predicate i j Flat]
+                   -> [AggregateElem i j]
+                   -> [Predicate i j Aggregated]
+                   -> [OrderingTerm i j]
+                   -> SubQuery i j
 aggregatedSubQuery = Aggregated
 
-setBin :: SetOp -> Duplication -> SubQuery -> SubQuery -> SubQuery
+setBin :: SetOp -> Duplication -> SubQuery i j -> SubQuery i j -> SubQuery i j
 setBin op = Bin . BinOp . (,) op
 
 -- | Union binary operator on 'SubQuery'
-union     :: Duplication -> SubQuery -> SubQuery -> SubQuery
+union     :: Duplication -> SubQuery i j -> SubQuery i j -> SubQuery i j
 union     =  setBin Union
 
 -- | Except binary operator on 'SubQuery'
-except    :: Duplication -> SubQuery -> SubQuery -> SubQuery
+except    :: Duplication -> SubQuery i j -> SubQuery i j -> SubQuery i j
 except    =  setBin Except
 
 -- | Intersect binary operator on 'SubQuery'
-intersect :: Duplication -> SubQuery -> SubQuery -> SubQuery
+intersect :: Duplication -> SubQuery i j -> SubQuery i j -> SubQuery i j
 intersect =  setBin Intersect
 
 
 whenClauses :: String                     -- ^ Error tag
-            -> [(Record c a, Record c b)] -- ^ Each when clauses
-            -> Record c b                 -- ^ Else result record
-            -> WhenClauses                -- ^ Result clause
+            -> [(Record i j c a, Record i j c b)] -- ^ Each when clauses
+            -> Record i j c b                 -- ^ Else result record
+            -> WhenClauses i j              -- ^ Result clause
 whenClauses eTag ws0 e = d ws0
   where
     d []       = error $ eTag ++ ": Empty when clauses!"
@@ -74,9 +74,9 @@ whenClauses eTag ws0 e = d ws0
 
 -- | Search case operator correnponding SQL search /CASE/.
 --   Like, /CASE WHEN p0 THEN a WHEN p1 THEN b ... ELSE c END/
-caseSearch :: [(Predicate c, Record c a)] -- ^ Each when clauses
-           -> Record c a                  -- ^ Else result record
-           -> Record c a                  -- ^ Result record
+caseSearch :: [(Predicate i j c, Record i j c a)] -- ^ Each when clauses
+           -> Record i j c a                  -- ^ Else result record
+           -> Record i j c a                  -- ^ Result record
 caseSearch ws e =
     record [ Case c i | i <- [0 .. recordWidth e - 1] ]
   where
@@ -84,10 +84,10 @@ caseSearch ws e =
 
 -- | Simple case operator correnponding SQL simple /CASE/.
 --   Like, /CASE x WHEN v THEN a WHEN w THEN b ... ELSE c END/
-case' :: Record c a                 -- ^ Record value to match
-      -> [(Record c a, Record c b)] -- ^ Each when clauses
-      -> Record c b                 -- ^ Else result record
-      -> Record c b                 -- ^ Result record
+case' :: Record i j c a                 -- ^ Record value to match
+      -> [(Record i j c a, Record i j c b)] -- ^ Each when clauses
+      -> Record i j c b                 -- ^ Else result record
+      -> Record i j c b                 -- ^ Result record
 case' v ws e =
     record [ Case c i | i <- [0 .. recordWidth e - 1] ]
   where

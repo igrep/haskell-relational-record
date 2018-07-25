@@ -67,9 +67,9 @@ instance MonadRestrict Flat q => MonadRestrict Flat (Restrictings Aggregated q) 
 
 extract :: AggregatedQuery p r
         -> ConfigureQuery (((((((PlaceHolders p, Record Aggregated r), [OrderingTerm]),
-                               [Predicate Aggregated]),
+                               [Predicate i j Aggregated]),
                               [AggregateElem]),
-                             [Predicate Flat]),
+                             [Predicate i j Flat]),
                             JoinProduct), Duplication)
 extract =  extractCore . extractAggregateTerms . extractRestrict . extractOrderingTerms
 
@@ -93,7 +93,7 @@ extractWindow =  runIdentity . extractAggregateTerms . extractOrderingTerms
 over :: SqlContext c
      => Record OverWindow a
      -> Window c ()
-     -> Record c a
+     -> Record i j c a
 wp `over` win =
   Record.unsafeFromSqlTerms
   [ c <> OVER <> SQL.paren (composePartitionBy pt <> composeOrderBy ot)

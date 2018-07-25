@@ -127,7 +127,7 @@ type AggregatingSetList  = AggregatingSetListT  Identity
 type PartitioningSet c   = PartitioningSetT c   Identity
 
 -- | Specify key of single grouping set from Record.
-key :: Record Flat r
+key :: Record i j Flat r
     -> AggregatingSet (Record Aggregated (Maybe r))
 key p = do
   mapM_ unsafeAggregateWithTerm [ aggregateColumnRef col | col <- untypeRecord p]
@@ -147,7 +147,7 @@ set s = do
   return p
 
 -- | Specify key of rollup and cube power set.
-bkey :: Record Flat r
+bkey :: Record i j Flat r
      -> AggregatingPowerSet (Record Aggregated (Maybe r))
 bkey p = do
   unsafeAggregateWithTerm . aggregatePowerKey $ untypeRecord p

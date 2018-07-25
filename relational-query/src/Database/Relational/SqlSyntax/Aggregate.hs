@@ -22,37 +22,37 @@ import Database.Relational.SqlSyntax.Types
 
 
 -- | Single term aggregation element.
-aggregateColumnRef :: AggregateColumnRef -> AggregateElem
+aggregateColumnRef :: AggregateColumnRef i j -> AggregateElem i j
 aggregateColumnRef =  ColumnRef
 
 -- | Key of aggregation power set.
-aggregatePowerKey :: [AggregateColumnRef] -> AggregateBitKey
+aggregatePowerKey :: [AggregateColumnRef i j] -> AggregateBitKey i j
 aggregatePowerKey =  AggregateBitKey
 
 -- | Single grouping set.
-aggregateGroupingSet :: [AggregateElem] -> AggregateSet
+aggregateGroupingSet :: [AggregateElem i j] -> AggregateSet i j
 aggregateGroupingSet =  AggregateSet
 
 -- | Rollup aggregation element.
-aggregateRollup :: [AggregateBitKey] -> AggregateElem
+aggregateRollup :: [AggregateBitKey i j] -> AggregateElem i j
 aggregateRollup =  Rollup
 
 -- | Cube aggregation element.
-aggregateCube :: [AggregateBitKey] -> AggregateElem
+aggregateCube :: [AggregateBitKey i j] -> AggregateElem i j
 aggregateCube =  Cube
 
 -- | Grouping sets aggregation.
-aggregateSets :: [AggregateSet] -> AggregateElem
+aggregateSets :: [AggregateSet i j] -> AggregateElem i j
 aggregateSets =  GroupingSets
 
 -- | Extract typed record from 'AggregateKey'.
-aggregateKeyRecord :: AggregateKey a -> a
+aggregateKeyRecord :: AggregateKey i j a -> a
 aggregateKeyRecord (AggregateKey (p, _c)) = p
 
 -- | Extract untyped term from 'AggregateKey'.
-aggregateKeyElement :: AggregateKey a -> AggregateElem
+aggregateKeyElement :: AggregateKey i j a -> AggregateElem i j
 aggregateKeyElement (AggregateKey (_p, c)) = c
 
 -- | Unsafely bind typed-record and untyped-term into 'AggregateKey'.
-unsafeAggregateKey :: (a, AggregateElem) -> AggregateKey a
+unsafeAggregateKey :: (a, AggregateElem i j) -> AggregateKey i j a
 unsafeAggregateKey = AggregateKey

@@ -50,7 +50,7 @@ import qualified Database.Relational.Internal.UntypedTable as UntypedTable
 import Database.Relational.Internal.String
   (StringSQL, stringSQL, rowStringSQL, showStringSQL, boolSQL, )
 import Database.Relational.SqlSyntax.Types
-  (SubQuery (..), Record, Tuple, Predicate,
+  (SubQuery(..), Record, Tuple, Predicate,
    Column (..), CaseClause(..), WhenClauses (..),
    NodeAttr (Just', Maybe), ProductTree (Leaf, Join), JoinProduct,
    Duplication (..), SetOp (..), BinOp (..), Qualifier (..), Qualified (..),
@@ -100,7 +100,7 @@ qualifiedSQLas :: Qualified StringSQL -> StringSQL
 qualifiedSQLas q = Syntax.unQualify q <> showQualifier (Syntax.qualifier q)
 
 -- | Width of 'SubQuery'.
-width :: SubQuery -> Int
+width :: SubQuery i j -> Int
 width =  d  where
   d (Table u)                     = UntypedTable.width' u
   d (Bin _ l _)                   = width l
@@ -108,7 +108,7 @@ width =  d  where
   d (Aggregated _ up _ _ _ _ _ _) = Syntax.tupleWidth up
 
 -- | Width of 'Qualified' 'SubQUery'.
-queryWidth :: Qualified SubQuery -> Int
+queryWidth :: Qualified (SubQuery i j) -> Int
 queryWidth =  width . Syntax.unQualify
 
 -- | Generate SQL from table for top-level.
@@ -126,7 +126,7 @@ fromTableToNormalizedSQL t = SELECT <> SQL.fold (|*|) columns' <>
              [(0 :: Int)..]
 
 -- | Generate normalized column SQL from joined tuple.
-selectPrefixSQL :: Tuple -> Duplication -> StringSQL
+selectPrefixSQL :: Tuple i j -> Duplication -> StringSQL
 selectPrefixSQL up da = SELECT <> showsDuplication da <>
                         SQL.fold (|*|) columns'  where
   columns' = zipWith asColumnN
@@ -136,7 +136,7 @@ selectPrefixSQL up da = SELECT <> showsDuplication da <>
 -- | Normalized column SQL for union like operations
 --   to keep compatibility with engines like Sqlite and MySQL.
 --   SQL with no ordering term is not paren-ed.
-normalizedSQL :: SubQuery -> StringSQL
+normalizedSQL :: SubQuery i j -> StringSQL
 normalizedSQL =  d  where
   d (Table t)                 =  fromTableToNormalizedSQL t
   d sub@(Bin {})              =  showUnitSQL sub
@@ -148,7 +148,7 @@ normalizedSQL =  d  where
     | otherwise               =  showUnitSQL sub
 
 -- | SQL string for nested-query and toplevel-SQL.
-toSQLs :: SubQuery
+toSQLs :: SubQuery i j
        -> (StringSQL, StringSQL) -- ^ sub-query SQL and top-level SQL
 toSQLs =  d  where
   d (Table u)               = (stringSQL $ UntypedTable.name' u, fromTableToSQL u)
@@ -161,23 +161,23 @@ toSQLs =  d  where
     q = selectPrefixSQL up da <> showsJoinProduct (productUnitSupport cf) pd <> composeWhere rs
         <> composeGroupBy ag <> composeHaving grs <> composeOrderBy od
 
-showUnitSQL :: SubQuery -> StringSQL
+showUnitSQL :: SubQuery i j -> StringSQL
 showUnitSQL =  fst . toSQLs
 
 -- | SQL string for nested-qeury.
-unitSQL :: SubQuery -> String
+unitSQL :: SubQuery i j -> String
 unitSQL =  showStringSQL . showUnitSQL
 
 -- | SQL StringSQL for toplevel-SQL.
-showSQL :: SubQuery -> StringSQL
+showSQL :: SubQuery i j -> StringSQL
 showSQL = snd . toSQLs
 
 -- | SQL string for toplevel-SQL.
-toSQL :: SubQuery -> String
+toSQL :: SubQuery i j -> String
 toSQL =  showStringSQL . showSQL
 
 -- | Get column SQL string of 'Qualified' 'SubQuery'.
-column :: Qualified SubQuery -> Int -> StringSQL
+column :: Qualified (SubQuery i j) -> Int -> StringSQL
 column qs =  d (Syntax.unQualify qs)  where
   q = Syntax.qualifier qs
   d (Table u)           i           = q <.> (u ! i)
@@ -186,7 +186,7 @@ column qs =  d (Syntax.unQualify qs)  where
   d (Aggregated _ up _ _ _ _ _ _) i = showTupleIndex up i
 
 -- | Make untyped tuple (qualified column list) from joined sub-query ('Qualified' 'SubQuery').
-tupleFromJoinedSubQuery :: Qualified SubQuery -> Tuple
+tupleFromJoinedSubQuery :: Qualified (SubQuery i j) -> Tuple i j
 tupleFromJoinedSubQuery qs = d $ Syntax.unQualify qs  where
   normalized = SubQueryRef <$> traverse (\q -> [0 .. width q - 1]) qs
   d (Table _)               =  map RawColumn . map (column qs)
@@ -196,7 +196,7 @@ tupleFromJoinedSubQuery qs = d $ Syntax.unQualify qs  where
   d (Aggregated {})         =  normalized
 
 -- | index result of each when clause and else clause.
-indexWhensClause :: WhenClauses -> Int -> StringSQL
+indexWhensClause :: WhenClauses i j -> Int -> StringSQL
 indexWhensClause (WhenClauses ps e) i =
     mconcat [ when' p r | (p, r)  <-  ps] <> else' <> SQL.END
   where
@@ -205,13 +205,13 @@ indexWhensClause (WhenClauses ps e) i =
     else'     = SQL.ELSE <> showTupleIndex e i
 
 -- | index result of each when clause and else clause.
-caseClause :: CaseClause -> Int -> StringSQL
+caseClause :: CaseClause i j -> Int -> StringSQL
 caseClause c i = d c  where
   d (CaseSearch wcl)    = SQL.CASE <> indexWhensClause wcl i
   d (CaseSimple m wcl)  = SQL.CASE <> rowStringSQL (map showColumn m) <> indexWhensClause wcl i
 
 -- | Convert from typed' Column' into column string expression.
-showColumn :: Column -> StringSQL
+showColumn :: Column i j -> StringSQL
 showColumn = d  where
   d (RawColumn e)     = e
   d (SubQueryRef qi)  = Syntax.qualifier qi `columnFromId` Syntax.unQualify qi
@@ -219,7 +219,7 @@ showColumn = d  where
   d (Case c i)        = caseClause c i
 
 -- | Get column SQL string of 'Tuple'.
-showTupleIndex :: Tuple     -- ^ Source 'Tuple'
+showTupleIndex :: Tuple i j   -- ^ Source 'Tuple'
                -> Int       -- ^ Column index
                -> StringSQL -- ^ Result SQL string
 showTupleIndex up i
@@ -229,13 +229,13 @@ showTupleIndex up i
     error $ "showTupleIndex: index out of bounds: " ++ show i
 
 -- | Get column SQL string list of record.
-recordRawColumns :: Record c r  -- ^ Source 'Record'
+recordRawColumns :: Record i j c r  -- ^ Source 'Record'
                  -> [StringSQL] -- ^ Result SQL string list
 recordRawColumns = map showColumn . Syntax.untypeRecord
 
 
 -- | Show product tree of query into SQL. StringSQL result.
-showsQueryProduct :: ProductTree [Predicate Flat] -> StringSQL
+showsQueryProduct :: ProductTree i j [Predicate i j Flat] -> StringSQL
 showsQueryProduct =  rec  where
   joinType Just' Just' = INNER
   joinType Just' Maybe = LEFT
@@ -254,7 +254,7 @@ showsQueryProduct =  rec  where
     where ps = [ rowStringSQL $ recordRawColumns p | p <- rs ]
 
 -- | Shows join product of query.
-showsJoinProduct :: ProductUnitSupport -> JoinProduct -> StringSQL
+showsJoinProduct :: ProductUnitSupport -> JoinProduct i j -> StringSQL
 showsJoinProduct ups =  maybe (up ups) from  where
   from qp = FROM <> showsQueryProduct qp
   up PUSupported    = mempty
@@ -262,17 +262,17 @@ showsJoinProduct ups =  maybe (up ups) from  where
 
 
 -- | Compose SQL String from 'QueryRestriction'.
-composeRestrict :: Keyword -> [Predicate c] -> StringSQL
+composeRestrict :: Keyword -> [Predicate i j c] -> StringSQL
 composeRestrict k = d  where
   d     []    =  mempty
   d ps@(_:_)  =  k <> foldr1 SQL.and [ rowStringSQL $ recordRawColumns p | p <- ps ]
 
 -- | Compose WHERE clause from 'QueryRestriction'.
-composeWhere :: [Predicate Flat] -> StringSQL
+composeWhere :: [Predicate i j Flat] -> StringSQL
 composeWhere =  composeRestrict WHERE
 
 -- | Compose HAVING clause from 'QueryRestriction'.
-composeHaving :: [Predicate Aggregated] -> StringSQL
+composeHaving :: [Predicate i j Aggregated] -> StringSQL
 composeHaving =  composeRestrict HAVING
 
 -----
@@ -283,11 +283,11 @@ commaed =  SQL.fold (|*|)
 pComma :: (a -> StringSQL) -> [a] -> StringSQL
 pComma qshow =  SQL.paren . commaed . map qshow
 
-showsAggregateBitKey :: AggregateBitKey -> StringSQL
+showsAggregateBitKey :: AggregateBitKey i j -> StringSQL
 showsAggregateBitKey (AggregateBitKey ts) = pComma id $ map showColumn ts
 
 -- | Compose GROUP BY clause from AggregateElem list.
-composeGroupBy :: [AggregateElem] -> StringSQL
+composeGroupBy :: [AggregateElem i j] -> StringSQL
 composeGroupBy =  d where
   d []       = mempty
   d es@(_:_) = GROUP <> BY <> rec es
@@ -300,7 +300,7 @@ composeGroupBy =  d where
   showsE (GroupingSets ss) = GROUPING <> SETS <> pComma showsGs ss
 
 -- | Compose PARTITION BY clause from AggregateColumnRef list.
-composePartitionBy :: [AggregateColumnRef] -> StringSQL
+composePartitionBy :: [AggregateColumnRef i j] -> StringSQL
 composePartitionBy =  d where
   d []       = mempty
   d ts@(_:_) = PARTITION <> BY <> commaed (map showColumn ts)
@@ -308,7 +308,7 @@ composePartitionBy =  d where
 -----
 
 -- | Compose ORDER BY clause from OrderingTerms
-composeOrderBy :: [OrderingTerm] -> StringSQL
+composeOrderBy :: [OrderingTerm i j] -> StringSQL
 composeOrderBy =  d where
   d []       = mempty
   d ts@(_:_) = ORDER <> BY <> SQL.fold (|*|) (map showsOt ts)

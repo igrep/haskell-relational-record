@@ -69,8 +69,8 @@ table n f = Table $ Untyped n w fa  where
   fa = listArray (0, w - 1) $ map stringSQL f
 
 -- | 'SubQuery' from 'Table'.
-toSubQuery :: Table r  -- ^ Typed 'Table' metadata
-           -> SubQuery -- ^ Result 'SubQuery'
+toSubQuery :: Table r    -- ^ Typed 'Table' metadata
+           -> SubQuery i j -- ^ Result 'SubQuery'
 toSubQuery = Syntax.Table . untype
 
 -- | Inference rule of 'Table' existence.
