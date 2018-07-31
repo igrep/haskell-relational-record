@@ -47,6 +47,7 @@ library
                        Database.Relational.Projectable.Unsafe
                        Database.Relational.Projectable.Instances
                        Database.Relational.TupleInstances
+                       Database.Relational.Monad.Accumulator
                        Database.Relational.Monad.BaseType
                        Database.Relational.Monad.Class
                        Database.Relational.Monad.Trans.Ordering

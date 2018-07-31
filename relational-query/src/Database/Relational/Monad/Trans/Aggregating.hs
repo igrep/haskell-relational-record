@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Database.Relational.Monad.Trans.Aggregating
@@ -62,20 +63,22 @@ aggregatings :: Monad m => m a -> Aggregatings ac at m a
 aggregatings =  lift
 
 -- | Context type building one grouping set.
-type AggregatingSetT      = Aggregatings Set       AggregateElem
+type AggregatingSetT = forall i j. Aggregatings Set       (AggregateElem i j)
 
 -- | Context type building grouping sets list.
-type AggregatingSetListT  = Aggregatings SetList   AggregateSet
+type AggregatingSetListT  = forall i j. Aggregatings SetList   (AggregateSet i j)
 
 -- | Context type building power group set.
-type AggregatingPowerSetT = Aggregatings Power     AggregateBitKey
+type AggregatingPowerSetT = forall i j. Aggregatings Power     (AggregateBitKey i j)
 
 -- | Context type building partition keys set.
-type PartitioningSetT c   = Aggregatings c         AggregateColumnRef
+type PartitioningSetT c   = forall i j. Aggregatings c         (AggregateColumnRef i j)
 
 -- | Aggregated 'MonadRestrict'.
-instance MonadRestrict c m => MonadRestrict c (AggregatingSetT m) where
+  {-
+instance MonadRestrict c m i j => MonadRestrict c (AggregatingSetT m) i j where
   restrict =  aggregatings . restrict
+  -}
 
 -- | Aggregated 'MonadQualify'.
 instance MonadQualify q m => MonadQualify q (AggregatingSetT m) where

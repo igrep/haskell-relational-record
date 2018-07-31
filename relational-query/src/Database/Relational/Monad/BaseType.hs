@@ -53,6 +53,7 @@ askConfig =  qualify askQueryConfig
 
 -- | Relation type with place-holder parameter 'p' and query result type 'r'.
 newtype Relation i j p r = SubQuery (ConfigureQuery (SubQuery i j))
+-- Unnecessary: i j
 
 -- | Unsafely type qualified subquery into record typed relation type.
 unsafeTypeRelation :: ConfigureQuery (SubQuery i j) -> Relation i j p r

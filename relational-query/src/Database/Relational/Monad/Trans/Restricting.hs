@@ -41,6 +41,7 @@ import Database.Relational.Monad.Class
 --   Flat (where) or Aggregated (having).
 newtype Restrictings c m a =
   Restrictings (WriterT (DList (Predicate i j c)) m a)
+  -- Predicate --> Tuple. Type info would be unnecessary,
 
 instance IxFunctor (Restrictings c m) where
   imap = undefined
