@@ -35,6 +35,8 @@ import Database.Relational (UntypeableNoFetch (untypeNoFetch))
 import Database.HDBC (IConnection, Statement, SqlValue)
 import qualified Database.HDBC as HDBC
 
+import           Debug.Trace
+
 import Database.Record (ToSql, fromRecord)
 
 -- | Typed prepared statement type.
@@ -114,7 +116,7 @@ bind :: ToSql SqlValue p
      => PreparedStatement p a -- ^ Prepared query to bind to
      -> p                     -- ^ Parameter to bind
      -> BoundStatement a      -- ^ Result parameter bound statement
-bind q p = BoundStatement { bound = prepared q, params = fromRecord p }
+bind q p = BoundStatement { bound = prepared q, params = traceShowId $ fromRecord p }
 
 -- | Same as 'bind' except for argument is flipped.
 bindTo :: ToSql SqlValue p => p -> PreparedStatement p a -> BoundStatement a

@@ -245,8 +245,8 @@ employee_4_3_2P :: Relation (Day,Day) Employee2
 employee_4_3_2P = relation' . placeholder $ \ph -> do
   e <- query employee
   let date = #startDate e
-  wheres $ date .>=. (! #fst) ph
   wheres $ date .<=. (! #snd) ph
+  wheres $ date .>=. (! #fst) ph
   return $ Employee2 |$| #empId e
                      |*| #fname e
                      |*| #lname e
@@ -260,6 +260,33 @@ data Employee2 = Employee2
   } deriving (Show, Generic)
 
 $(makeRelationalRecord ''Employee2)
+
+
+data Params = Params
+  { paramsStartDateFrom :: Day
+  , paramsStartDateTo :: Day
+  , paramsEmpIdFrom :: Int
+  , paramsEmpIdTo :: Int
+  } deriving (Eq, Show, Generic)
+
+$(makeRelationalRecord ''Params)
+
+{-
+  do { conn <- connectSqlite3 "relational-record-examples/examples.db"; run conn (Params (read "2001-01-01") (read "2003-01-01") 0 999) employeeFromParams }
+-}
+employeeFromParams :: Relation Params Employee2
+employeeFromParams = relation' . placeholder $ \ph -> do
+  e <- query employee
+  let date = #startDate e
+      empId = #empId e
+  wheres $ date .>=. (! #paramsStartDateFrom) ph
+  wheres $ date .<=. (! #paramsStartDateTo) ph
+  wheres $ empId .>=. (! #paramsEmpIdFrom) ph
+  wheres $ empId .<=. (! #paramsEmpIdTo) ph
+  return $ Employee2 |$| #empId e
+                     |*| #fname e
+                     |*| #lname e
+                     |*| date
 
 -- | sql/4.3.3a.sh
 --
