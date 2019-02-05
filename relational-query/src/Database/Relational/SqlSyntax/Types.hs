@@ -52,8 +52,8 @@ module Database.Relational.SqlSyntax.Types (
   setPlaceholdersOffsets,
   setPlaceholdersOffsets',
   toPlaceholdersRecord,
-  copyPlaceholdersOffsetsTo,
-  concatPlaceholderOffsetsTo,
+  isPlaceholders,
+  appendPlaceholderOffsetsOf,
 
   -- * Predicate to restrict Query result
   Predicate,
@@ -210,20 +210,24 @@ type Predicate c = Record c (Maybe Bool)
 type PI c a b = Record c a -> Record c b
 
 -- | Unsafely type 'Tuple' value to 'Record' type.
-record :: Tuple -> Record c t
-record = Record mempty
+record :: DList Int -> Tuple -> Record c t
+record = Record
 
 -- | Width of 'Record'.
 recordWidth :: Record c r -> Int
 recordWidth = length . untypeRecord
 
 -- | Unsafely generate 'Record' from SQL string list.
-typeFromRawColumns :: [StringSQL] -- ^ SQL string list specifies columns
+typeFromRawColumns :: DList Int
+                   -> [StringSQL] -- ^ SQL string list specifies columns
                    -> Record c r  -- ^ Result 'Record'
-typeFromRawColumns =  record . map RawColumn
+typeFromRawColumns phs =  record phs . map RawColumn
 
 toPlaceholdersRecord :: Record c r -> Record c r
 toPlaceholdersRecord r = setPlaceholdersOffsets [0 .. tupleWidth (untypeRecord r) - 1] r
+
+isPlaceholders :: Record c r -> Bool
+isPlaceholders = (/= mempty) . placeholderOffsets
 
 setPlaceholdersOffsets :: [Int] ->  Record c r -> Record c r
 setPlaceholdersOffsets os r = r { placeholderOffsets = fromList os }
@@ -231,14 +235,9 @@ setPlaceholdersOffsets os r = r { placeholderOffsets = fromList os }
 setPlaceholdersOffsets' :: DList Int ->  Record c r -> Record c r
 setPlaceholdersOffsets' os r = r { placeholderOffsets = os }
 
-copyPlaceholdersOffsetsTo :: Record c1 src -> Record c2 dest -> Record c2 dest
-copyPlaceholdersOffsetsTo src dest  =
-  dest { placeholderOffsets = placeholderOffsets src }
-
-concatPlaceholderOffsetsTo :: Record c1 src1 -> Record c2 src2 -> Record c3 dest -> Record c3 dest
-concatPlaceholderOffsetsTo src1 src2 dest =
-  dest { placeholderOffsets = placeholderOffsets src1 <> placeholderOffsets src2 }
+appendPlaceholderOffsetsOf :: Record c1 a -> Record c2 b -> DList Int
+appendPlaceholderOffsetsOf src1 src2 = placeholderOffsets src1 <> placeholderOffsets src2
 
 -- | Unsafely generate 'Record' from scalar sub-query.
-typeFromScalarSubQuery :: SubQuery -> Record c t
-typeFromScalarSubQuery = record . (:[]) . Scalar
+typeFromScalarSubQuery :: DList Int -> SubQuery -> Record c t
+typeFromScalarSubQuery phs = record phs . (:[]) . Scalar
