@@ -42,7 +42,7 @@ import Database.Relational.Monad.Trans.JoinState
   (JoinContext, primeJoinContext, updateProduct, joinProduct)
 import qualified Database.Relational.Record as Record
 import Database.Relational.Projectable (PlaceHolders, unsafeAddPlaceHolders)
-import Database.Relational.Monad.BaseType (ConfigureQuery, qualifyQuery, Relation, untypeRelation)
+import Database.Relational.Monad.BaseType (ConfigureQuery, qualifyQuery, Relation, untypeRelationNoPlaceholders)
 import Database.Relational.Monad.Class (MonadQualify (..), MonadQuery (..))
 
 
@@ -96,7 +96,7 @@ queryWithAttr :: NodeAttr
 queryWithAttr attr = unsafeAddPlaceHolders . run where
   run rel = do
     q <- liftQualify $ do
-      sq <- untypeRelation rel
+      sq <- untypeRelationNoPlaceholders rel
       qualifyQuery sq
     unsafeSubQueryWithAttr attr q
 

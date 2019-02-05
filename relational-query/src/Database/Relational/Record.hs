@@ -42,6 +42,7 @@ module Database.Relational.Record (
   ) where
 
 import Prelude hiding (pi)
+import Data.DList (DList)
 import Data.Functor.ProductIsomorphic
   (ProductIsoFunctor, (|$|), ProductIsoApplicative, pureP, (|*|),
    ProductIsoEmpty, pureE, peRight, peLeft, )
@@ -104,8 +105,11 @@ unsafeFromSqlTerms = Syntax.typeFromRawColumns
 -- | Unsafely trace projection path.
 unsafeProject :: PersistableRecordWidth a -> Record c a' -> Pi a b -> Record c b'
 unsafeProject w p pi' =
-  Syntax.typeFromRawColumns
-  . (UnsafePi.pi w pi')
+  -- igrep TODO: Should I call setReferredPlaceholdersOffsets anytime?
+  --             Maybe I should call it only if the Record's referredPlaceholdersOffsets is not empty
+  Syntax.setPlaceholdersOffsets (UnsafePi.unsafeExpandIndexes' w pi')
+  . Syntax.typeFromRawColumns
+  . UnsafePi.pi w pi'
   . columns $ p
 
 -- | Trace projection path to get narrower 'Record'.
@@ -186,18 +190,18 @@ instance ProductIsoEmpty (Record c) () where
 
 -- | Projected record list type for row list.
 data RecordList p t = List [p t]
-                    | Sub SubQuery
+                    | Sub (DList Int) SubQuery
 
 -- | Make projected record list from 'Record' list.
 list :: [p t] -> RecordList p t
 list =  List
 
 -- | Make projected record list from 'SubQuery'.
-unsafeListFromSubQuery :: SubQuery -> RecordList p t
+unsafeListFromSubQuery :: DList Int -> SubQuery -> RecordList p t
 unsafeListFromSubQuery =  Sub
 
 -- | Map record show operatoions and concatinate to single SQL expression.
 unsafeStringSqlList :: (p t -> StringSQL) -> RecordList p t -> StringSQL
 unsafeStringSqlList sf = d  where
   d (List ps) = listStringSQL $ map sf ps
-  d (Sub sub) = SQL.paren $ Syntax.showSQL sub
+  d (Sub _ sub) = SQL.paren $ Syntax.showSQL sub

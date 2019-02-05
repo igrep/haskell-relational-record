@@ -157,7 +157,8 @@ type SqlBinOp = Keyword -> Keyword -> Keyword
 -- | Unsafely make unary operator for records from SQL keyword.
 unsafeUniOp :: SqlContext c2
             => (Keyword -> Keyword) -> Record c1 a -> Record c2 b
-unsafeUniOp u = unsafeProjectSql' . u . unsafeShowSql'
+unsafeUniOp u r =
+  Syntax.copyPlaceholdersOffsetsTo r . unsafeProjectSql' . u . unsafeShowSql' $ r
 
 unsafeFlatUniOp :: SqlContext c
                 => Keyword -> Record c a -> Record c b
@@ -167,8 +168,11 @@ unsafeFlatUniOp kw = unsafeUniOp (SQL.paren . SQL.defineUniOp kw)
 unsafeBinOp :: SqlContext k
             => SqlBinOp
             -> Record k a -> Record k b -> Record k c
-unsafeBinOp op a b = unsafeProjectSql' . SQL.paren $
-                     op (unsafeShowSql' a) (unsafeShowSql' b)
+unsafeBinOp op a b =
+    Syntax.concatPlaceholderOffsetsTo a b
+  . unsafeProjectSql'
+  . SQL.paren
+  $ op (unsafeShowSql' a) (unsafeShowSql' b)
 
 -- | Unsafely make binary operator to compare records from string binary operator.
 compareBinOp :: SqlContext c
@@ -229,6 +233,7 @@ not' :: OperatorContext c
 not' =  unsafeFlatUniOp SQL.NOT
 
 -- | Logical operator corresponding SQL /EXISTS/ .
+-- | igrep TODO: append placeholderOffsets
 exists :: OperatorContext c
        => RecordList (Record Exists) r -> Record c (Maybe Bool)
 exists =  unsafeProjectSql' . SQL.paren . SQL.defineUniOp SQL.EXISTS
@@ -300,7 +305,8 @@ negate' =  unsafeFlatUniOp $ SQL.word "-"
 
 unsafeCastProjectable :: SqlContext c
                       => Record c a -> Record c b
-unsafeCastProjectable = unsafeProjectSql' . unsafeShowSql'
+unsafeCastProjectable r =
+  Syntax.copyPlaceholdersOffsetsTo r . unsafeProjectSql' . unsafeShowSql' $ r
 
 -- | Number fromIntegral uni-operator.
 fromIntegral' :: (SqlContext c, Integral a, Num b)
@@ -392,6 +398,7 @@ caseMaybe :: (OperatorContext c {- (Record c) is always ProjectableMaybe -}, Per
 caseMaybe v cs = case' v cs nothing
 
 -- | Binary operator corresponding SQL /IN/ .
+-- | igrep TODO: append placeholderOffsets
 in' :: OperatorContext c
     => Record c t -> RecordList (Record c) t -> Record c (Maybe Bool)
 in' a lp = unsafeProjectSql' . SQL.paren
@@ -400,9 +407,11 @@ in' a lp = unsafeProjectSql' . SQL.paren
 -- | Operator corresponding SQL /IS NULL/ , and extended against record types.
 isNothing :: (OperatorContext c, HasColumnConstraint NotNull r)
           => Record c (Maybe r) -> Predicate c
-isNothing mr = unsafeProjectSql' $
-               SQL.paren $ (SQL.defineBinOp SQL.IS)
-               (Record.unsafeStringSqlNotNullMaybe mr) SQL.NULL
+isNothing mr =
+      Syntax.copyPlaceholdersOffsetsTo mr
+    . unsafeProjectSql'
+    . SQL.paren
+    $ SQL.defineBinOp SQL.IS (Record.unsafeStringSqlNotNullMaybe mr) SQL.NULL
 
 -- | Operator corresponding SQL /NOT (... IS NULL)/ , and extended against record type.
 isJust :: (OperatorContext c, HasColumnConstraint NotNull r)
@@ -467,7 +476,8 @@ pwPlaceholder pw f = (PlaceHolders, f $ projectPlaceHolder pw)
     projectPlaceHolder :: SqlContext c
                        => PersistableRecordWidth a
                        -> Record c a
-    projectPlaceHolder = unsafeProjectSqlTerms . (`replicate` "?") . runPersistableRecordWidth
+    projectPlaceHolder =
+      Syntax.toPlaceholdersRecord . unsafeProjectSqlTerms . (`replicate` "?") . runPersistableRecordWidth
 
 -- | Provide scoped placeholder and return its parameter object.
 placeholder' :: (PersistableWidth t, SqlContext c) => (Record c t -> a) ->  (PlaceHolders t, a)
