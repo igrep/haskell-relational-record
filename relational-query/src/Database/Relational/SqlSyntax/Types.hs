@@ -49,8 +49,6 @@ module Database.Relational.SqlSyntax.Types (
   typeFromScalarSubQuery,
 
   -- * Manipulate records representing placeholders
-  setPlaceholdersOffsets,
-  setPlaceholdersOffsets',
   toPlaceholdersRecord,
   isPlaceholders,
   appendPlaceholderOffsetsOf,
@@ -231,9 +229,6 @@ isPlaceholders = (/= mempty) . placeholderOffsets
 
 setPlaceholdersOffsets :: [Int] ->  Record c r -> Record c r
 setPlaceholdersOffsets os r = r { placeholderOffsets = fromList os }
-
-setPlaceholdersOffsets' :: DList Int ->  Record c r -> Record c r
-setPlaceholdersOffsets' os r = r { placeholderOffsets = os }
 
 appendPlaceholderOffsetsOf :: Record c1 a -> Record c2 b -> DList Int
 appendPlaceholderOffsetsOf src1 src2 = placeholderOffsets src1 <> placeholderOffsets src2

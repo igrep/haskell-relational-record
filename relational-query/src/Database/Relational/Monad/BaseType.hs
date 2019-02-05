@@ -53,19 +53,19 @@ askConfig =  qualify askQueryConfig
 
 
 -- | Relation type with place-holder parameter 'p' and query result type 'r'.
-data Relation p r = SubQuery !(DList Int) !(ConfigureQuery SubQuery)
+newtype Relation p r = SubQuery (ConfigureQuery (DList Int, SubQuery))
 
 -- | Unsafely type qualified subquery into record typed relation type.
--- igrep TODO: Inherit placeholders
-unsafeTypeRelation :: DList Int -> ConfigureQuery SubQuery -> Relation p r
+unsafeTypeRelation :: ConfigureQuery (DList Int, SubQuery) -> Relation p r
 unsafeTypeRelation = SubQuery
 
 -- | Sub-query Qualify monad from relation.
-untypeRelation :: Relation p r -> (DList Int, ConfigureQuery SubQuery)
-untypeRelation (SubQuery phs qsub) = (phs, qsub)
+-- igrep TODO: Maybe should rename!
+untypeRelation :: Relation p r -> ConfigureQuery (DList Int, SubQuery)
+untypeRelation (SubQuery qps) = qps
 
 untypeRelationNoPlaceholders :: Relation p r -> ConfigureQuery SubQuery
-untypeRelationNoPlaceholders (SubQuery _phs qsub) = qsub
+untypeRelationNoPlaceholders (SubQuery qps) = snd <$> qps
 
 -- | 'PersistableRecordWidth' of 'Relation' type.
 relationWidth :: Relation p r ->  PersistableRecordWidth r
@@ -74,7 +74,7 @@ relationWidth rel =
   ---                               Assume that width is independent from Config structure
 
 unsafeCastPlaceHolder :: Relation a r -> Relation b r
-unsafeCastPlaceHolder (SubQuery qsub phs) = SubQuery qsub phs
+unsafeCastPlaceHolder (SubQuery qps) = SubQuery qps
 
 -- | Simplify placeholder type applying left identity element.
 rightPh :: Relation ((), p) r -> Relation p r

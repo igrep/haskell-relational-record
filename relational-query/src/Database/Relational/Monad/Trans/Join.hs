@@ -85,9 +85,9 @@ unsafeSubQueryWithAttr :: Monad q
                        => NodeAttr                 -- ^ Attribute maybe or just
                        -> Qualified SubQuery       -- ^ 'SubQuery' to join
                        -> QueryJoin q (Record c r) -- ^ Result joined context and record of 'SubQuery' result.
-unsafeSubQueryWithAttr attr qsub = do
-  updateContext (updateProduct (`growProduct` (attr, qsub)))
-  return $ Record.unsafeFromQualifiedSubQuery qsub
+unsafeSubQueryWithAttr attr qps = do
+  updateContext (updateProduct (`growProduct` (attr, qps)))
+  return $ Record.unsafeFromQualifiedSubQuery mempty qps
 
 -- | Basic monadic join operation using 'MonadQuery'.
 queryWithAttr :: NodeAttr
