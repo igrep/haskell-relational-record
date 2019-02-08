@@ -148,13 +148,10 @@ uniqueQueryWithAttr :: NodeAttr
                     -> QueryUnique (PlaceHolders p, Record c r)
 uniqueQueryWithAttr attr = unsafeAddPlaceHolders . run where
   run rel = do
-    (phs, q) <- liftQualify $ do
-      let (phs', csq) = untypeRelation (unUnique rel)
-      q' <- qualifyQuery =<< csq
-      return (phs', q')
-    setPlaceholdersOffsets' phs
-      .   Record.unsafeChangeContext
-      <$> unsafeUniqueSubQuery attr q
+    let (phs, csq) = untypeRelation (unUnique rel)
+    q <- liftQualify $ qualifyQuery =<< csq
+    Record.unsafeChangeContext
+      <$> unsafeUniqueSubQuery attr phs q
 
 -- | Join unique sub-query with place-holder parameter 'p'.
 uniqueQuery' :: UniqueRelation p c r
@@ -185,11 +182,13 @@ aggregatedUnique rel k ag = unsafeUnique . aggregateRelation' $ do
 queryScalar' :: (MonadQualify ConfigureQuery m, MonadReferPlaceholders m, ScalarDegree r)
              => UniqueRelation p c r
              -> m (PlaceHolders p, Record c (Maybe r))
-queryScalar' ur =
-  unsafeAddPlaceHolders . liftQualify $ do
-    let (phs, subq) = untypeRelation (unUnique ur)
-    appendPlaceholderOffsets phs
-    Record.unsafeFromScalarSubQuery <$> subq
+queryScalar' ur = do
+  let (phs, subq) = untypeRelation (unUnique ur)
+  appendPlaceholderOffsets phs
+  unsafeAddPlaceHolders . liftQualify $
+    Record.unsafeFromScalarSubQuery mempty <$> subq
+    --                        NOTE: ^ Placeholders referred by `rel` are appended by
+    --                                appendPlaceholderOffsets above. So here should be empty.
 
 -- | Scalar sub-query.
 queryScalar :: (MonadQualify ConfigureQuery m, MonadReferPlaceholders m, ScalarDegree r)

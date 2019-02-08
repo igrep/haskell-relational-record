@@ -14,7 +14,10 @@ module Database.Relational.Monad.BaseType
          qualifyQuery, askConfig,
 
          -- * Relation type
-         Relation, unsafeTypeRelation, untypeRelation, untypeRelationNoPlaceholders, relationWidth,
+         Relation,
+         unsafeTypeRelation, untypeRelation, untypeRelationNoPlaceholders,
+         getReferredPlaceholders,
+         relationWidth,
 
          dump,
          sqlFromRelationWith, sqlFromRelation,
@@ -56,7 +59,6 @@ askConfig =  qualify askQueryConfig
 data Relation p r = SubQuery !(DList Int) !(ConfigureQuery SubQuery)
 
 -- | Unsafely type qualified subquery into record typed relation type.
--- igrep TODO: Inherit placeholders
 unsafeTypeRelation :: DList Int -> ConfigureQuery SubQuery -> Relation p r
 unsafeTypeRelation = SubQuery
 
@@ -66,6 +68,9 @@ untypeRelation (SubQuery phs qsub) = (phs, qsub)
 
 untypeRelationNoPlaceholders :: Relation p r -> ConfigureQuery SubQuery
 untypeRelationNoPlaceholders (SubQuery _phs qsub) = qsub
+
+getReferredPlaceholders :: Relation p r -> DList Int
+getReferredPlaceholders (SubQuery phs _qsub) = phs
 
 -- | 'PersistableRecordWidth' of 'Relation' type.
 relationWidth :: Relation p r ->  PersistableRecordWidth r

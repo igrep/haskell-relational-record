@@ -20,6 +20,7 @@ module Database.Relational.Monad.Unique
        ) where
 
 import Control.Applicative (Applicative)
+import Data.DList (DList)
 
 import Database.Relational.Internal.ContextType (Flat)
 import Database.Relational.SqlSyntax
@@ -42,9 +43,10 @@ newtype QueryUnique a = QueryUnique (QueryCore a)
 
 -- | Unsafely join sub-query with this unique query.
 unsafeUniqueSubQuery :: NodeAttr                 -- ^ Attribute maybe or just
+                     -> DList Int                -- ^ Referred placeholders
                      -> Qualified SubQuery       -- ^ 'SubQuery' to join
                      -> QueryUnique (Record c r) -- ^ Result joined context and record of 'SubQuery' result.
-unsafeUniqueSubQuery a  = QueryUnique . restrictings . unsafeSubQueryWithAttr a
+unsafeUniqueSubQuery a phs = QueryUnique . restrictings . unsafeSubQueryWithAttr a phs
 
 extract :: QueryUnique a
         -> ConfigureQuery (((a, [Predicate Flat]), JoinProduct), Duplication)

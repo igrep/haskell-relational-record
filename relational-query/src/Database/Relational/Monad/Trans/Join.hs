@@ -30,6 +30,7 @@ import Control.Monad.Trans.Writer (WriterT, runWriterT, tell)
 import Control.Monad.Trans.State (modify, StateT, runStateT)
 import Control.Applicative (Applicative, (<$>))
 import Control.Arrow (second, (***))
+import Data.DList (DList)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Last (Last, getLast))
 
@@ -42,7 +43,8 @@ import Database.Relational.Monad.Trans.JoinState
   (JoinContext, primeJoinContext, updateProduct, joinProduct)
 import qualified Database.Relational.Record as Record
 import Database.Relational.Projectable (PlaceHolders, unsafeAddPlaceHolders)
-import Database.Relational.Monad.BaseType (ConfigureQuery, qualifyQuery, Relation, untypeRelationNoPlaceholders)
+import Database.Relational.Monad.BaseType
+  (ConfigureQuery, qualifyQuery, Relation, untypeRelationNoPlaceholders, getReferredPlaceholders)
 import Database.Relational.Monad.Class (MonadQualify (..), MonadQuery (..))
 
 
@@ -83,11 +85,12 @@ instance MonadQuery (QueryJoin ConfigureQuery) where
 -- | Unsafely join sub-query with this query.
 unsafeSubQueryWithAttr :: Monad q
                        => NodeAttr                 -- ^ Attribute maybe or just
+                       -> DList Int                -- ^ Referred placeholders
                        -> Qualified SubQuery       -- ^ 'SubQuery' to join
                        -> QueryJoin q (Record c r) -- ^ Result joined context and record of 'SubQuery' result.
-unsafeSubQueryWithAttr attr qsub = do
+unsafeSubQueryWithAttr attr phs qsub = do
   updateContext (updateProduct (`growProduct` (attr, qsub)))
-  return $ Record.unsafeFromQualifiedSubQuery qsub
+  return $ Record.unsafeFromQualifiedSubQuery phs qsub
 
 -- | Basic monadic join operation using 'MonadQuery'.
 queryWithAttr :: NodeAttr
@@ -98,7 +101,8 @@ queryWithAttr attr = unsafeAddPlaceHolders . run where
     q <- liftQualify $ do
       sq <- untypeRelationNoPlaceholders rel
       qualifyQuery sq
-    unsafeSubQueryWithAttr attr q
+    -- igrep TODO: More clean way?
+    unsafeSubQueryWithAttr attr (getReferredPlaceholders rel) q
 
 -- | Run 'QueryJoin' to get 'JoinProduct'
 extractProduct :: Functor m => QueryJoin m a -> m ((a, JoinProduct), Duplication)
