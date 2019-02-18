@@ -54,3 +54,7 @@ instance MonadReferPlaceholders m => MonadReferPlaceholders (ReferredPlaceholder
 
 appendPlaceholdersOfRecord :: (Monad m, MonadReferPlaceholders m) => Record c a -> m ()
 appendPlaceholdersOfRecord = appendPlaceholderOffsets . placeholderOffsets
+
+
+extractReferredPlaceholders :: Functor m => ReferredPlaceholders m a -> m (a, DList Int)
+extractReferredPlaceholders (ReferredPlaceholders act) = runWriterT act

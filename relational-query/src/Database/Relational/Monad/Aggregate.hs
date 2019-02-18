@@ -48,18 +48,19 @@ import Database.Relational.Monad.Trans.Aggregating
   (extractAggregateTerms, AggregatingSetT, PartitioningSet)
 import Database.Relational.Monad.Trans.Ordering
   (Orderings, extractOrderingTerms)
+import Database.Relational.Monad.Trans.ReferredPlaceholders
 import Database.Relational.Monad.BaseType (ConfigureQuery, askConfig)
 import Database.Relational.Monad.Type (QueryCore, extractCore, OrderedQuery)
 
 
 -- | Aggregated query monad type.
-type QueryAggregate     = Orderings Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore))
+type QueryAggregate     = ReferredPlaceholders (Orderings Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore)))
 
 -- | Aggregated query type. 'AggregatedQuery' p r == 'QueryAggregate' ('PlaceHolders' p, 'Record' 'Aggregated' r).
 type AggregatedQuery p r = OrderedQuery Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore)) p r
 
 -- | Partition monad type for partition-by clause.
-type Window           c = Orderings c (PartitioningSet c)
+type Window           c = ReferredPlaceholders (Orderings c (PartitioningSet c))
 
 -- | Restricted 'MonadRestrict' instance.
 instance MonadRestrict Flat q => MonadRestrict Flat (Restrictings Aggregated q) where
