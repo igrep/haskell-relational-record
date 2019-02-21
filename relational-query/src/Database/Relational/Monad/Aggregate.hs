@@ -51,14 +51,14 @@ import Database.Relational.Monad.Trans.Aggregating
 import Database.Relational.Monad.Trans.Ordering
   (Orderings, extractOrderingTerms)
 import Database.Relational.Monad.BaseType (ConfigureQuery, askConfig)
-import Database.Relational.Monad.Type (QueryCore, extractCore, OrderedQuery)
+import Database.Relational.Monad.Type (QueryCore, extractCore)
 
 
 -- | Aggregated query monad type.
-type QueryAggregate     = ReferredPlaceholders (Orderings Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore)))
+type QueryAggregate      = ReferredPlaceholders (Orderings Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore)))
 
--- | Aggregated query type. 'AggregatedQuery' p r == 'QueryAggregate' ('PlaceHolders' p, 'Record' 'Aggregated' r).
-type AggregatedQuery p r = OrderedQuery Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore)) p r
+-- | Aggregated query type with placeholders.
+type AggregatedQuery p r = ReferredPlaceholders (Orderings Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore))) (PlaceHolders p, Record Aggregated r)
 
 -- | Partition monad type for partition-by clause.
 type Window           c = ReferredPlaceholders (Orderings c (PartitioningSet c))

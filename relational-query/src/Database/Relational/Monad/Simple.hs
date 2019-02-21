@@ -37,15 +37,15 @@ import Database.Relational.Monad.Trans.Restricting (restrictings)
 import Database.Relational.Monad.Trans.Ordering
   (Orderings, orderings, extractOrderingTerms)
 import Database.Relational.Monad.BaseType (ConfigureQuery, askConfig)
-import Database.Relational.Monad.Type (QueryCore, extractCore, OrderedQuery)
+import Database.Relational.Monad.Type (QueryCore, extractCore)
 import Database.Relational.Projectable (PlaceHolders)
 
 
 -- | Simple (not-aggregated) query monad type.
-type QuerySimple = ReferredPlaceholders (Orderings Flat QueryCore)
+type QuerySimple     = ReferredPlaceholders (Orderings Flat QueryCore)
 
--- | Simple (not-aggregated) query type. 'SimpleQuery'' p r == 'QuerySimple' ('PlaceHolders' p, 'Record' r).
-type SimpleQuery p r = OrderedQuery Flat QueryCore p r
+-- | Simple (not-aggregated) query type with placeholders.
+type SimpleQuery p r = ReferredPlaceholders (Orderings Flat QueryCore) (PlaceHolders p, Record Flat r)
 
 -- | Lift from qualified table forms into 'QuerySimple'.
 simple :: ConfigureQuery a -> QuerySimple a
