@@ -22,7 +22,7 @@ module Database.Relational.Monad.Assign (
 import Database.Relational.Internal.Config (Config)
 import Database.Relational.Internal.ContextType (Flat)
 import Database.Relational.SqlSyntax
-  (Predicate, Record, Assignment)
+  (Record, Assignment, WithPlaceholderOffsets, Tuple)
 
 import Database.Relational.Table (Table)
 import Database.Relational.Monad.Restrict (Restrict)
@@ -44,5 +44,5 @@ type AssignStatement r a = Record Flat r -> Assign r a
 -- updateStatement =  assignings . restrictings . Identity
 
 -- | Run 'Assign'.
-extract :: Assign r a -> Config -> ((a, Table r -> [Assignment]), [Predicate Flat])
+extract :: Assign r a -> Config -> ((a, Table r -> WithPlaceholderOffsets [Assignment]), [WithPlaceholderOffsets Tuple])
 extract =  Restrict.extract . extractAssignments

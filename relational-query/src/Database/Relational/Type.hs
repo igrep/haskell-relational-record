@@ -82,23 +82,24 @@ import Database.Relational.Projectable (PlaceHolders, unitPH)
 import Database.Relational.SimpleSql
   (QuerySuffix, showsQuerySuffix, insertPrefixSQL,
    updateOtherThanKeySQL, updatePrefixSQL, deletePrefixSQL)
+import Database.Relational.SqlSyntax (SQLWithPlaceholderOffsets, detachPlaceholderOffsets)
 
 
 -- | Query type with place-holder parameter 'p' and query result type 'a'.
-newtype Query p a = Query { untypeQuery :: String }
+newtype Query p a = Query { untypeQuery :: SQLWithPlaceholderOffsets }
 
 -- | Unsafely make typed 'Query' from SQL string.
-unsafeTypedQuery :: String    -- ^ Query SQL to type
-                 -> Query p a -- ^ Typed result
+unsafeTypedQuery :: SQLWithPlaceholderOffsets -- ^ Query SQL to type
+                 -> Query p a                 -- ^ Typed result
 unsafeTypedQuery =  Query
 
 -- | Show query SQL string
 instance Show (Query p a) where
-  show = untypeQuery
+  show = detachPlaceholderOffsets . untypeQuery
 
 -- | From 'Relation' into untyped SQL query string.
-relationalQuerySQL :: Config -> Relation p r -> QuerySuffix -> String
-relationalQuerySQL config rel qsuf = showStringSQL $ sqlFromRelationWith rel config <> showsQuerySuffix qsuf
+relationalQuerySQL :: Config -> Relation p r -> QuerySuffix -> SQLWithPlaceholderOffsets
+relationalQuerySQL config rel qsuf = (\s -> showStringSQL $ s <> showsQuerySuffix qsuf) <$> sqlFromRelationWith rel config
 
 -- | From 'Relation' into typed 'Query' with suffix SQL words.
 relationalQuery' :: Relation p r -> QuerySuffix -> Query p r
@@ -146,15 +147,15 @@ instance Show (KeyUpdate p a) where
 
 
 -- | Update type with place-holder parameter 'p'.
-newtype Update p = Update { untypeUpdate :: String }
+newtype Update p = Update { untypeUpdate :: SQLWithPlaceholderOffsets }
 
 -- | Unsafely make typed 'Update' from SQL string.
-unsafeTypedUpdate :: String -> Update p
+unsafeTypedUpdate :: SQLWithPlaceholderOffsets -> Update p
 unsafeTypedUpdate =  Update
 
 -- | Make untyped update SQL string from 'Table' and 'UpdateTarget'.
-updateSQL :: Config -> Table r -> UpdateTarget p r -> String
-updateSQL config tbl ut = showStringSQL $ updatePrefixSQL tbl <> sqlFromUpdateTarget config tbl ut
+updateSQL :: Config -> Table r -> UpdateTarget p r -> SQLWithPlaceholderOffsets
+updateSQL config tbl ut = showStringSQL . (updatePrefixSQL tbl <>) <$> sqlFromUpdateTarget config tbl ut
 
 -- | Make typed 'Update' from 'Config', 'Table' and 'UpdateTarget'.
 typedUpdate' :: Config -> Table r -> UpdateTarget p r -> Update p
@@ -252,18 +253,18 @@ derivedUpdateAllColumn = updateAllColumn
 
 -- | Show update SQL string
 instance Show (Update p) where
-  show = untypeUpdate
+  show = detachPlaceholderOffsets . untypeUpdate
 
 
 -- | Insert type to insert record type 'a'.
 data Insert a   =
   Insert
-  { untypeInsert  :: String
-  , chunkedInsert :: Maybe (String, Int)
+  { untypeInsert  :: SQLWithPlaceholderOffsets
+  , chunkedInsert :: Maybe (SQLWithPlaceholderOffsets, Int)
   }
 
 -- | Statement to use chunked insert
-untypeChunkInsert :: Insert a -> String
+untypeChunkInsert :: Insert a -> SQLWithPlaceholderOffsets
 untypeChunkInsert ins = maybe (untypeInsert ins) fst $ chunkedInsert ins
 
 -- | Size to use chunked insert
@@ -271,11 +272,11 @@ chunkSizeOfInsert :: Insert a -> Int
 chunkSizeOfInsert = maybe 1 snd . chunkedInsert
 
 -- | Unsafely make typed 'Insert' from single insert and chunked insert SQL.
-unsafeTypedInsert' :: String -> String -> Int -> Insert a
+unsafeTypedInsert' :: SQLWithPlaceholderOffsets -> SQLWithPlaceholderOffsets -> Int -> Insert a
 unsafeTypedInsert' s = curry (Insert s . Just)
 
 -- | Unsafely make typed 'Insert' from single insert SQL.
-unsafeTypedInsert :: String -> Insert a
+unsafeTypedInsert :: SQLWithPlaceholderOffsets -> Insert a
 unsafeTypedInsert s = Insert s Nothing
 
 -- | Make typed 'Insert' from 'Table' and columns selector 'Pi' with configuration parameter.
@@ -301,8 +302,9 @@ derivedInsert = insert
 typedInsertValue' :: Config -> Table r -> InsertTarget p r -> Insert p
 typedInsertValue' config tbl it =
     unsafeTypedInsert'
-    (showStringSQL $ sqlFromInsertTarget config tbl it)
-    (showStringSQL ci) n
+      (showStringSQL <$> sqlFromInsertTarget config tbl it)
+      (showStringSQL <$> ci)
+      n
   where
     (ci, n) = sqlChunkFromInsertTarget config tbl it
 
@@ -343,7 +345,7 @@ insertValueList' :: (TableDerivable r, LiteralSQL r')
                  -> [r']
                  -> [Insert ()]
 insertValueList' config pi' =
-  map (unsafeTypedInsert . showStringSQL)
+  map (unsafeTypedInsert . fmap showStringSQL)
   . sqlChunksFromRecordList config derivedTable pi'
 
 -- | Make typed 'Insert' list from records list.
@@ -355,18 +357,18 @@ insertValueList = insertValueList' defaultConfig
 
 -- | Show insert SQL string.
 instance Show (Insert a) where
-  show = untypeInsert
+  show = detachPlaceholderOffsets . untypeInsert
 
 -- | InsertQuery type.
-newtype InsertQuery p = InsertQuery { untypeInsertQuery :: String }
+newtype InsertQuery p = InsertQuery { untypeInsertQuery :: SQLWithPlaceholderOffsets }
 
 -- | Unsafely make typed 'InsertQuery' from SQL string.
-unsafeTypedInsertQuery :: String -> InsertQuery p
+unsafeTypedInsertQuery :: SQLWithPlaceholderOffsets -> InsertQuery p
 unsafeTypedInsertQuery =  InsertQuery
 
 -- | Make untyped insert select SQL string from 'Table', 'Pi' and 'Relation'.
-insertQuerySQL :: Config -> Table r -> Pi r r' -> Relation p r' -> String
-insertQuerySQL config tbl pi' rel = showStringSQL $ insertPrefixSQL pi' tbl <> sqlFromRelationWith rel config
+insertQuerySQL :: Config -> Table r -> Pi r r' -> Relation p r' -> SQLWithPlaceholderOffsets
+insertQuerySQL config tbl pi' rel = showStringSQL . (insertPrefixSQL pi' tbl <>) <$> sqlFromRelationWith rel config
 
 -- | Make typed 'InsertQuery' from columns selector 'Table', 'Pi' and 'Relation' with configuration parameter.
 typedInsertQuery' :: Config -> Table r -> Pi r r' -> Relation p r' -> InsertQuery p
@@ -388,19 +390,19 @@ derivedInsertQuery = insertQuery
 
 -- | Show insert SQL string.
 instance Show (InsertQuery p) where
-  show = untypeInsertQuery
+  show = detachPlaceholderOffsets . untypeInsertQuery
 
 
 -- | Delete type with place-holder parameter 'p'.
-newtype Delete p = Delete { untypeDelete :: String }
+newtype Delete p = Delete { untypeDelete :: SQLWithPlaceholderOffsets }
 
 -- | Unsafely make typed 'Delete' from SQL string.
-unsafeTypedDelete :: String -> Delete p
+unsafeTypedDelete :: SQLWithPlaceholderOffsets -> Delete p
 unsafeTypedDelete =  Delete
 
 -- | Make untyped delete SQL string from 'Table' and 'Restriction'.
-deleteSQL :: Config -> Table r -> Restriction p r -> String
-deleteSQL config tbl r = showStringSQL $ deletePrefixSQL tbl <> sqlWhereFromRestriction config tbl r
+deleteSQL :: Config -> Table r -> Restriction p r -> SQLWithPlaceholderOffsets
+deleteSQL config tbl r = showStringSQL . (deletePrefixSQL tbl <>) <$> sqlWhereFromRestriction config tbl r
 
 -- | Make typed 'Delete' from 'Config', 'Table' and 'Restriction'.
 typedDelete' :: Config -> Table r -> Restriction p r -> Delete p
@@ -439,13 +441,13 @@ derivedDelete = delete
 
 -- | Show delete SQL string
 instance Show (Delete p) where
-  show = untypeDelete
+  show = detachPlaceholderOffsets . untypeDelete
 
 
 -- | Untype interface for typed no-result type statments
 --   with single type parameter which represents place-holder parameter 'p'.
 class UntypeableNoFetch s where
-  untypeNoFetch :: s p -> String
+  untypeNoFetch :: s p -> SQLWithPlaceholderOffsets
 
 instance UntypeableNoFetch Insert where
   untypeNoFetch = untypeInsert

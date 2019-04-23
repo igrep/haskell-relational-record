@@ -89,7 +89,6 @@ import Database.Relational hiding
    QuerySimple, QueryAggregate, QueryUnique, Orderings, Window, Register)
 import qualified Database.Relational as Monadic
 import qualified Database.Relational.Monad.Trans.Aggregating as Monadic
-import qualified Database.Relational.Monad.Trans.Ordering as Monadic
 import qualified Database.Relational.Monad.Trans.Assigning as Monadic
 
 
@@ -348,7 +347,7 @@ key = queryA Monadic.key
 
 -- | Same as 'Monadic.key''.
 --   This arrow is designed to be injected by local 'AggregteKey'.
-key' :: AggregatingSet (AggregateKey a) a
+key' :: AggregatingSet (AggregateKey (Monadic.WithPlaceholderOffsets a)) (Monadic.WithPlaceholderOffsets a)
 key' = queryA Monadic.key'
 
 -- | Same as 'Monadic.set'.
@@ -363,17 +362,17 @@ bkey = queryA Monadic.bkey
 
 -- | Same as 'Monadic.rollup'.
 --   Finalize locally built 'AggregatingPowerSet'.
-rollup :: AggregatingPowerSet () a -> AggregateKey a
+rollup :: AggregatingPowerSet () a -> AggregateKey (Monadic.WithPlaceholderOffsets a)
 rollup = runAofM Monadic.rollup
 
 -- | Same as 'Monadic.cube'.
 --   Finalize locally built 'AggregatingPowerSet'.
-cube :: AggregatingPowerSet () a -> AggregateKey a
+cube :: AggregatingPowerSet () a -> AggregateKey (Monadic.WithPlaceholderOffsets a)
 cube = runAofM Monadic.cube
 
 -- | Same as 'Monadic.groupingSets'.
 --   Finalize locally built 'AggregatingSetList'.
-groupingSets :: AggregatingSetList () a -> AggregateKey a
+groupingSets :: AggregatingSetList () a -> AggregateKey (Monadic.WithPlaceholderOffsets a)
 groupingSets = runAofM Monadic.groupingSets
 
 -- | Same as 'Monadic.orderBy''.

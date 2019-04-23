@@ -27,8 +27,8 @@ import Data.Time (LocalTime, Day)
 import Language.Haskell.TH (TypeQ)
 
 import Database.Relational
-  (Query, relationalQuery, Relation, query, relation',
-   wheres, (.=.), (!), (><), placeholder, asc, value)
+  (Query, relationalQuery, Relation, query, relationWithPlaceholder,
+   wheres, (.=.), (!), (><), placeholder, asc, value, fst', snd')
 
 import Control.Applicative ((<|>))
 
@@ -78,12 +78,12 @@ getType mapFromSql rec = do
 
 -- | 'Relation' to query 'Columns' from schema name and table name.
 columnsRelationFromTable :: Relation (String, String) Columns
-columnsRelationFromTable =  relation' $ do
+columnsRelationFromTable =  relationWithPlaceholder $ \ph -> do
   c <- query columns
-  (schemaP, ()) <- placeholder (\ph -> wheres $ c ! Columns.tabschema' .=. ph)
-  (nameP  , ()) <- placeholder (\ph -> wheres $ c ! Columns.tabname'   .=. ph)
+  wheres $ c ! Columns.tabschema' .=. ph ! fst'
+  wheres $ c ! Columns.tabname'   .=. ph ! snd'
   asc $ c ! Columns.colno'
-  return (schemaP >< nameP, c)
+  return c
 
 -- | Phantom typed 'Query' to get 'Columns' from schema name and table name.
 columnsQuerySQL :: Query (String, String) Columns
@@ -92,7 +92,7 @@ columnsQuerySQL =  relationalQuery columnsRelationFromTable
 
 -- | 'Relation' to query primary key name from schema name and table name.
 primaryKeyRelation :: Relation (String, String) String
-primaryKeyRelation =  relation' $ do
+primaryKeyRelation =  relationWithPlaceholder $ \ph -> do
   cons  <- query tabconst
   key   <- query keycoluse
   col   <- query columns
@@ -106,12 +106,12 @@ primaryKeyRelation =  relation' $ do
   wheres $ cons ! Tabconst.type'     .=. value "P"
   wheres $ cons ! Tabconst.enforced' .=. value "Y"
 
-  (schemaP, ()) <- placeholder (\ph -> wheres $ cons ! Tabconst.tabschema' .=. ph)
-  (nameP  , ()) <- placeholder (\ph -> wheres $ cons ! Tabconst.tabname'   .=. ph)
+  wheres $ cons ! Tabconst.tabschema' .=. ph  ! fst'
+  wheres $ cons ! Tabconst.tabname'   .=. ph  ! snd'
 
   asc  $ key ! Keycoluse.colseq'
 
-  return   (schemaP >< nameP, key ! Keycoluse.colname')
+  return (key ! Keycoluse.colname')
 
 -- | Phantom typed 'Query' to get primary key name from schema name and table name.
 primaryKeyQuerySQL :: Query (String, String) String

@@ -22,7 +22,7 @@ module Database.Relational.Monad.Restrict (
 
 import Database.Relational.Internal.ContextType (Flat)
 import Database.Relational.Internal.Config (Config)
-import Database.Relational.SqlSyntax (Predicate, Record)
+import Database.Relational.SqlSyntax (Tuple, Record, WithPlaceholderOffsets)
 
 import Database.Relational.Monad.Trans.Restricting
   (Restrictings, extractRestrict)
@@ -42,5 +42,5 @@ type RestrictedStatement r a = Record Flat r -> Restrict a
 -- restricted =  restrict . Identity
 
 -- | Run 'Restrict' to get 'QueryRestriction'.
-extract :: Restrict a -> Config -> (a, [Predicate Flat])
+extract :: Restrict a -> Config -> (a, [WithPlaceholderOffsets Tuple])
 extract =  configureQuery . extractRestrict

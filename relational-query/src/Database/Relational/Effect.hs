@@ -37,9 +37,10 @@ import Language.SQL.Keyword (Keyword(..))
 import Database.Record.Persistable (PersistableWidth)
 
 import Database.Relational.Internal.Config (Config (chunksInsertSize), defaultConfig)
-import Database.Relational.Internal.String (StringSQL, stringSQL, showStringSQL)
+import Database.Relational.Internal.String (stringSQL, showStringSQL)
 import Database.Relational.SqlSyntax
-  (composeWhere, composeSets, composeChunkValuesWithColumns, composeValuesListWithColumns)
+  (composeWhere, composeSets, composeChunkValuesWithColumns, composeValuesListWithColumns,
+   SQLWithPlaceholderOffsets', detachPlaceholderOffsets)
 
 import Database.Relational.Pi (Pi, id')
 import qualified Database.Relational.Pi.Unsafe as Pi
@@ -74,13 +75,13 @@ runRestriction :: Restriction p r
 runRestriction (Restriction qf) = qf
 
 -- | SQL WHERE clause 'StringSQL' string from 'Restriction'.
-sqlWhereFromRestriction :: Config -> Table r -> Restriction p r -> StringSQL
-sqlWhereFromRestriction config tbl (Restriction q) = composeWhere rs
+sqlWhereFromRestriction :: Config -> Table r -> Restriction p r -> SQLWithPlaceholderOffsets'
+sqlWhereFromRestriction config tbl (Restriction q) = composeWhere <$> sequenceA rs
   where (_ph, rs) = Restrict.extract (q $ Record.unsafeFromTable tbl) config
 
 -- | Show where clause.
 instance TableDerivable r => Show (Restriction p r) where
-  show = showStringSQL . sqlWhereFromRestriction defaultConfig derivedTable
+  show = showStringSQL . detachPlaceholderOffsets . sqlWhereFromRestriction defaultConfig derivedTable
 
 
 -- | UpdateTarget type with place-holder parameter 'p' and projected record type 'r'.
@@ -130,12 +131,12 @@ updateTargetAllColumn' = liftTargetAllColumn' . restriction'
 
 
 -- | SQL SET clause and WHERE clause 'StringSQL' string from 'UpdateTarget'
-sqlFromUpdateTarget :: Config -> Table r -> UpdateTarget p r -> StringSQL
-sqlFromUpdateTarget config tbl (UpdateTarget q) = composeSets (asR tbl) <> composeWhere rs
+sqlFromUpdateTarget :: Config -> Table r -> UpdateTarget p r -> SQLWithPlaceholderOffsets'
+sqlFromUpdateTarget config tbl (UpdateTarget q) = (<>) <$> composeSets (asR tbl) <*> (composeWhere <$> sequenceA rs)
   where ((_ph, asR), rs) = Assign.extract (q (Record.unsafeFromTable tbl)) config
 
 instance TableDerivable r => Show (UpdateTarget p r) where
-  show = showStringSQL . sqlFromUpdateTarget defaultConfig derivedTable
+  show = showStringSQL . detachPlaceholderOffsets . sqlFromUpdateTarget defaultConfig derivedTable
 
 
 -- | InsertTarget type with place-holder parameter 'p' and projected record type 'r'.
@@ -164,9 +165,9 @@ sqlChunkFromInsertTarget' :: Config
                           -> Int
                           -> Table r
                           -> InsertTarget p r
-                          -> StringSQL
+                          -> SQLWithPlaceholderOffsets'
 sqlChunkFromInsertTarget' config sz tbl (InsertTarget q) =
-    INSERT <> INTO <> stringSQL (Table.name tbl) <> composeChunkValuesWithColumns sz (asR tbl)
+    (\cs -> INSERT <> INTO <> stringSQL (Table.name tbl) <> cs) <$> composeChunkValuesWithColumns sz (asR tbl)
   where
     (_ph, asR) = Register.extract q config
 
@@ -183,14 +184,14 @@ countChunks config tbl =
 sqlChunkFromInsertTarget :: Config
                          -> Table r
                          -> InsertTarget p r
-                         -> (StringSQL, Int)
+                         -> (SQLWithPlaceholderOffsets', Int)
 sqlChunkFromInsertTarget config tbl it =
     (sqlChunkFromInsertTarget' config n tbl it, n)
   where
     n = countChunks config tbl
 
 -- | Make 'StringSQL' string of SQL INSERT statement from 'InsertTarget'
-sqlFromInsertTarget :: Config -> Table r -> InsertTarget p r -> StringSQL
+sqlFromInsertTarget :: Config -> Table r -> InsertTarget p r -> SQLWithPlaceholderOffsets'
 sqlFromInsertTarget config = sqlChunkFromInsertTarget' config 1
 
 -- | Make 'StringSQL' strings of SQL INSERT strings from records list
@@ -199,14 +200,15 @@ sqlChunksFromRecordList :: LiteralSQL r'
                         -> Table r
                         -> Pi r r'
                         -> [r']
-                        -> [StringSQL]
+                        -> [SQLWithPlaceholderOffsets']
 sqlChunksFromRecordList config tbl pi' xs =
-    [ INSERT <> INTO <> stringSQL (Table.name tbl) <>
-      composeValuesListWithColumns
-      [ tf tbl
-      | r <- rs
-      , let ((), tf) = Register.extract (pi' <-# value r) config
-      ]
+    [ (\cs -> INSERT <> INTO <> stringSQL (Table.name tbl) <> cs)
+      <$>
+        composeValuesListWithColumns
+        [ tf tbl
+        | r <- rs
+        , let ((), tf) = Register.extract (pi' <-# value r) config
+        ]
     | rs <- unfoldr step xs
     ]
   where

@@ -35,7 +35,7 @@ import Data.Time
    LocalTime, ZonedTime, Day, TimeOfDay)
 
 import Database.Relational
-  (Query, relationalQuery, Relation, query, query', relation', relation, union,
+  (Query, relationalQuery, Relation, query, query', relationWithPlaceholder, relation, union,
    wheres, (.=.), (.>.), in', values, (!), fst', snd',
    placeholder, asc, value, unsafeProjectSql, (><))
 
@@ -117,30 +117,30 @@ getType mapFromSql column@(pgAttr, pgTyp) = do
 
 -- | 'Relation' to query PostgreSQL relation oid from schema name and table name.
 relOidRelation :: Relation (String, String) Int32
-relOidRelation = relation' $ do
+relOidRelation = relationWithPlaceholder $ \ph -> do
   nsp <- query pgNamespace
   cls <- query pgClass
 
   wheres $ cls ! Class.relnamespace' .=. nsp ! Namespace.oid'
-  (nspP, ()) <- placeholder (\ph -> wheres $ nsp ! Namespace.nspname'  .=. ph)
-  (relP, ()) <- placeholder (\ph -> wheres $ cls ! Class.relname'      .=. ph)
+  wheres $ nsp ! Namespace.nspname'  .=. ph ! fst'
+  wheres $ cls ! Class.relname'      .=. ph ! snd'
 
-  return   (nspP >< relP, cls ! Class.oid')
+  return   (cls ! Class.oid')
 
 -- | 'Relation' to query column attribute from schema name and table name.
 attributeRelation :: Relation (String, String) PgAttribute
-attributeRelation =  relation' $ do
+attributeRelation =  relationWithPlaceholder $ \ph -> do
   (ph, reloid) <- query' relOidRelation
   att          <- query  pgAttribute
 
   wheres $ att ! Attr.attrelid' .=. reloid
   wheres $ att ! Attr.attnum'   .>. value 0
 
-  return   (ph, att)
+  return   att
 
 -- | 'Relation' to query 'Column' from schema name and table name.
 columnRelation :: Relation (String, String) Column
-columnRelation = relation' $ do
+columnRelation = relationWithPlaceholder $ \ph -> do
   (ph, att) <- query' attributeRelation
   typ       <- query  pgType
 
@@ -157,7 +157,7 @@ columnRelation = relation' $ do
 
   asc $ att ! Attr.attnum'
 
-  return (ph, att >< typ)
+  return (att >< typ)
 
 -- | Phantom typed 'Query' to get 'Column' from schema name and table name.
 columnQuerySQL :: Query (String, String) Column
@@ -165,14 +165,14 @@ columnQuerySQL =  relationalQuery columnRelation
 
 -- | 'Relation' to query primary key length from schema name and table name.
 primaryKeyLengthRelation :: Relation (String, String) Int32
-primaryKeyLengthRelation =  relation' $ do
+primaryKeyLengthRelation =  relationWithPlaceholder $ \ph -> do
   (ph, reloid) <- query' relOidRelation
-  con       <- query  pgConstraint
+  con          <- query  pgConstraint
 
   wheres $ con ! Constraint.conrelid' .=. reloid
   wheres $ con ! Constraint.contype'  .=. value 'p'  -- 'p': primary key constraint type
 
-  return (ph, unsafeProjectSql "array_length (conkey, 1)")
+  return (unsafeProjectSql "array_length (conkey, 1)")
 
 -- | Phantom typed 'Query' to get primary key length from schema name and table name.
 primaryKeyLengthQuerySQL :: Query (String, String) Int32
@@ -192,7 +192,7 @@ constraintColExpandRelation n =
 
 -- | 'Relation' to query primary key name from schema name and table name.
 primaryKeyRelation :: Int32 -> Relation (String, String) String
-primaryKeyRelation n = relation' $ do
+primaryKeyRelation n = relationWithPlaceholder $ \ph -> do
   (ph, att) <- query' attributeRelation
   conEx     <- query  (constraintColExpandRelation n)
 
@@ -207,7 +207,7 @@ primaryKeyRelation n = relation' $ do
 
   asc  $ keyN
 
-  return (ph, att ! Attr.attname')
+  return (att ! Attr.attname')
 
 -- | Phantom typed 'Query' to get primary key name from schema name and table name.
 primaryKeyQuerySQL :: Int32 -> Query (String, String) String

@@ -94,6 +94,7 @@ import Database.Relational
    Insert, insert, InsertQuery, insertQuery,
    HasConstraintKey(constraintKey), Primary, NotNull, primarySelect, primaryUpdate)
 
+import Database.Relational.SqlSyntax (attachEmptyPlaceholderOffsets, detachPlaceholderOffsets,)
 import Database.Relational.InternalTH.Base (defineTuplePi, defineRecordProjections)
 import Database.Relational.Scalar (defineScalarDegree)
 import Database.Relational.Constraint (unsafeDefineConstraintKey)
@@ -432,7 +433,7 @@ unsafeInlineQuery :: TypeQ   -- ^ Query parameter type
 unsafeInlineQuery p r sql qVar' =
   simpleValD (varName qVar')
     [t| Query $p $r |]
-    [|  unsafeTypedQuery $(stringE sql) |]
+    [|  unsafeTypedQuery $ attachEmptyPlaceholderOffsets $(stringE sql) |]
 
 -- | Extract param type and result type from defined Relation
 reifyRelation :: Name           -- ^ Variable name which has Relation type
@@ -455,7 +456,7 @@ inlineQuery :: Name         -- ^ Top-level variable name which has 'Relation' ty
 inlineQuery relVar rel config sufs qns = do
   (p, r) <- reifyRelation relVar
   unsafeInlineQuery (return p) (return r)
-    (relationalQuerySQL config rel sufs)
+    (detachPlaceholderOffsets $ relationalQuerySQL config rel sufs)
     (varCamelcaseName qns)
 
 -- | Generate all templates against defined record like type constructor

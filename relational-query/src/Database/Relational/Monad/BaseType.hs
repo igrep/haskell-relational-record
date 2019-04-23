@@ -23,13 +23,15 @@ module Database.Relational.Monad.BaseType
        ) where
 
 import Data.Functor.Identity (Identity, runIdentity)
-import Control.Applicative ((<$>))
+import Control.Arrow ((&&&))
 
 import Database.Record.Persistable (PersistableRecordWidth, unsafePersistableRecordWidth)
 
-import Database.Relational.Internal.String (StringSQL, showStringSQL)
+import Database.Relational.Internal.String (showStringSQL)
 import Database.Relational.Internal.Config (Config, defaultConfig)
-import Database.Relational.SqlSyntax (Qualified, SubQuery, showSQL, width)
+import Database.Relational.SqlSyntax
+  (Qualified, SubQuery, SQLWithPlaceholderOffsets',
+   showSQL, width, collectPlaceholderOffsets, detachPlaceholderOffsets, withPlaceholderOffsets)
 
 import qualified Database.Relational.Monad.Trans.Qualify as Qualify
 import Database.Relational.Monad.Trans.Qualify (Qualify, qualify, evalQualifyPrime)
@@ -80,11 +82,12 @@ leftPh :: Relation (p, ()) r -> Relation p r
 leftPh =  unsafeCastPlaceHolder
 
 -- | Generate SQL string from 'Relation' with configuration.
-sqlFromRelationWith :: Relation p r -> Config -> StringSQL
-sqlFromRelationWith =  configureQuery . (showSQL <$>) . untypeRelation
+sqlFromRelationWith :: Relation p r -> Config -> SQLWithPlaceholderOffsets'
+sqlFromRelationWith r c =
+  uncurry withPlaceholderOffsets . (collectPlaceholderOffsets &&& showSQL) . (`configureQuery` c) $ untypeRelation r
 
 -- | SQL string from 'Relation'.
-sqlFromRelation :: Relation p r -> StringSQL
+sqlFromRelation :: Relation p r -> SQLWithPlaceholderOffsets'
 sqlFromRelation =  (`sqlFromRelationWith` defaultConfig)
 
 -- | Dump internal structure tree.
@@ -92,4 +95,4 @@ dump :: Relation p r -> String
 dump =  show . (`configureQuery` defaultConfig) . untypeRelation
 
 instance Show (Relation p r) where
-  show = showStringSQL . sqlFromRelation
+  show = showStringSQL . detachPlaceholderOffsets . sqlFromRelation

@@ -75,14 +75,12 @@ getType mapFromSql cols = do
 
 -- | 'Relation' to query 'DbaTabColumns' from owner name and table name.
 columnsRelationFromTable :: Relation (String, String) DbaTabColumns
-columnsRelationFromTable = relation' $ do
+columnsRelationFromTable = relationWithPlaceholder $ \ph -> do
     cols <- query dbaTabColumns
-    (owner, ()) <- placeholder $ \owner ->
-        wheres $ cols ! Cols.owner' .=. owner
-    (name, ()) <- placeholder $ \name ->
-        wheres $ cols ! Cols.tableName' .=. name
+    wheres $ cols ! Cols.owner' .=. ph ! fst'
+    wheres $ cols ! Cols.tableName' .=. ph ! snd'
     asc $ cols ! Cols.columnId'
-    return (owner >< name, cols)
+    return cols
 
 -- | Phantom typed 'Query' to get 'DbaTabColumns' from owner name and table name.
 columnsQuerySQL :: Query (String, String) DbaTabColumns
@@ -90,7 +88,7 @@ columnsQuerySQL = relationalQuery columnsRelationFromTable
 
 -- | 'Relation' to query primary key name from owner name and table name.
 primaryKeyRelation :: Relation (String, String) (Maybe String)
-primaryKeyRelation = relation' $ do
+primaryKeyRelation = relationWithPlaceholder $ \ph -> do
     cons <- query dbaConstraints
     cols <- query dbaTabColumns
     consCols <- query dbaConsColumns
@@ -103,14 +101,12 @@ primaryKeyRelation = relation' $ do
     wheres $ cols ! Cols.nullable' .=. just (value "N")
     wheres $ cons ! Cons.constraintType' .=. just (value "P")
 
-    (owner, ()) <- placeholder $ \owner ->
-        wheres $ cons ! Cons.owner' .=. just owner
-    (name, ()) <- placeholder $ \name ->
-        wheres $ cons ! Cons.tableName' .=. name
+    wheres $ cons ! Cons.owner' .=. just (ph ! fst')
+    wheres $ cons ! Cons.tableName' .=. (ph ! snd')
 
     asc $ consCols ! ConsCols.position'
 
-    return (owner >< name, consCols ! ConsCols.columnName')
+    return (consCols ! ConsCols.columnName')
 
 -- | Phantom typed 'Query' to get primary key name from owner name and table name.
 primaryKeyQuerySQL :: Query (String, String) (Maybe String)

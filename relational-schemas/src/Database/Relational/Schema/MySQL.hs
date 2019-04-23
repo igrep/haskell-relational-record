@@ -21,7 +21,7 @@ import           Language.Haskell.TH    (TypeQ)
 import Database.Relational              ( Query
                                         , relationalQuery
                                         , query
-                                        , relation'
+                                        , relationWithPlaceholder
                                         , wheres
                                         , (.=.)
                                         , (!)
@@ -29,6 +29,8 @@ import Database.Relational              ( Query
                                         , placeholder
                                         , asc
                                         , value
+                                        , fst'
+                                        , snd'
                                         )
 
 import           Database.Relational.Schema.MySQLInfo.Columns           (Columns, columns)
@@ -87,17 +89,17 @@ getType mapFromSql rec = do
 columnsQuerySQL :: Query (String, String) Columns
 columnsQuerySQL = relationalQuery columnsRelationFromTable
     where
-        columnsRelationFromTable = relation' $ do
+        columnsRelationFromTable = relationWithPlaceholder $ \ph -> do
             c <- query columns
-            (schemaP, ()) <- placeholder (\ph -> wheres $ c ! Columns.tableSchema' .=. ph)
-            (nameP  , ()) <- placeholder (\ph -> wheres $ c ! Columns.tableName'   .=. ph)
+            wheres $ c ! Columns.tableSchema' .=. ph ! fst'
+            wheres $ c ! Columns.tableName'   .=. ph ! snd'
             asc $ c ! Columns.ordinalPosition'
-            return (schemaP >< nameP, c)
+            return c
 
 primaryKeyQuerySQL :: Query (String, String) String
 primaryKeyQuerySQL = relationalQuery primaryKeyRelation
     where
-        primaryKeyRelation = relation' $ do
+        primaryKeyRelation = relationWithPlaceholder $ \ph -> do
             cons <- query tableConstraints
             key  <- query keyColumnUsage
 
@@ -105,10 +107,10 @@ primaryKeyQuerySQL = relationalQuery primaryKeyRelation
             wheres $ cons ! Tabconst.tableName'      .=. key ! Keycoluse.tableName'
             wheres $ cons ! Tabconst.constraintName' .=. key ! Keycoluse.constraintName'
 
-            (schemaP, ()) <- placeholder (\ph -> wheres $ cons ! Tabconst.tableSchema' .=. ph)
-            (nameP  , ()) <- placeholder (\ph -> wheres $ cons ! Tabconst.tableName'   .=. ph)
+            wheres $ cons ! Tabconst.tableSchema' .=. ph ! fst'
+            wheres $ cons ! Tabconst.tableName'   .=. ph ! snd'
             wheres $ cons ! Tabconst.constraintType' .=. value "PRIMARY KEY"
 
             asc $ key ! Keycoluse.ordinalPosition'
 
-            return (schemaP >< nameP, key ! Keycoluse.columnName')
+            return (key ! Keycoluse.columnName')

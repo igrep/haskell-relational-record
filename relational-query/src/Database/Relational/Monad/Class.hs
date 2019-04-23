@@ -23,9 +23,9 @@ module Database.Relational.Monad.Class
 
 import Database.Relational.Internal.ContextType (Flat, Aggregated)
 import Database.Relational.SqlSyntax
-  (Duplication (..), Predicate, Record, AggregateKey)
+  ( Duplication (..) , Predicate, Record, AggregateKey, )
 
-import Database.Relational.Projectable (PlaceHolders)
+import Database.Relational.Projectable.Unsafe (PlaceHolders) -- import Unsafe directly to avoid cyclic imports
 import Database.Relational.Monad.BaseType (ConfigureQuery, Relation)
 
 
@@ -44,7 +44,7 @@ class (Functor m, Monad m, MonadQualify ConfigureQuery m) => MonadQuery m where
                -> m ()           -- ^ Restricted query context
   {- Haddock BUG? -}
   -- | Join sub-query with place-holder parameter 'p'. query result is not 'Maybe'.
-  query' :: Relation p r
+  query' :: Relation p r -- igrep TODO: Make query' and queryList' receive a value representing placeholder offsets with its type.
          -> m (PlaceHolders p, Record Flat r)
   -- | Join sub-query with place-holder parameter 'p'. Query result is 'Maybe'.
   queryMaybe' :: Relation p r
@@ -65,8 +65,8 @@ class MonadQuery m => MonadAggregate m where
   groupBy :: Record Flat r           -- ^ Record to add into group by
           -> m (Record Aggregated r) -- ^ Result context and aggregated record
   -- | Add /GROUP BY/ term into context and get aggregated record. Non-traditional group-by version.
-  groupBy' :: AggregateKey (Record Aggregated r)  -- ^ Key to aggretate for non-traditional group-by interface
-           -> m (Record Aggregated r)             -- ^ Result context and aggregated record
+  groupBy' :: AggregateKey (Record Aggregated r) -- ^ Key to aggretate for non-traditional group-by interface
+           -> m (Record Aggregated r)            -- ^ Result context and aggregated record
 
 -- | Window specification building interface.
 class Monad m => MonadPartition c m where

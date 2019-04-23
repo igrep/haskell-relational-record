@@ -14,7 +14,7 @@
 module Database.Relational.Relation (
   -- * Relation type
   table, derivedRelation, tableOf,
-  relation, relation',
+  relation, relation', relationWithPlaceholder,
   aggregateRelation, aggregateRelation',
 
   UniqueRelation,
@@ -29,6 +29,7 @@ module Database.Relational.Relation (
 
 import Control.Applicative ((<$>))
 
+import Database.Record (PersistableWidth)
 import Database.Relational.Internal.ContextType (Flat, Aggregated)
 import Database.Relational.SqlSyntax (NodeAttr(Just', Maybe), Record, )
 
@@ -50,7 +51,7 @@ import Database.Relational.Pi (Pi)
 import Database.Relational.Record (RecordList)
 import qualified Database.Relational.Record as Record
 import Database.Relational.Projectable
-  (PlaceHolders, unitPlaceHolder, unsafeAddPlaceHolders, unsafePlaceHolders, )
+  (PlaceHolders, SqlContext, unitPlaceHolder, unsafeAddPlaceHolders, unsafePlaceHolders, placeholderDeprecated, )
 
 
 -- | Simple 'Relation' from 'Table'.
@@ -97,6 +98,7 @@ queryList0 =  liftQualify
               . untypeRelation
 
 -- | List sub-query, for /IN/ and /EXIST/ with place-holder parameter 'p'.
+-- igrep TODO: Make query' and queryList' receive a value representing placeholder offsets with its type.
 queryList' :: MonadQualify ConfigureQuery m
            => Relation p r
            -> m (PlaceHolders p, RecordList (Record c) r)
@@ -116,6 +118,10 @@ addUnitPH =  ((,) unitPlaceHolder <$>)
 -- | Finalize 'QuerySimple' monad and generate 'Relation' with place-holder parameter 'p'.
 relation' :: SimpleQuery p r -> Relation p r
 relation' =  unsafeTypeRelation . Simple.toSubQuery
+{-# DEPRECATED relation' "Use relationWithPlaceholder instead." #-}
+
+relationWithPlaceholder :: (PersistableWidth p, SqlContext c) => (Record c p -> QuerySimple (Record Flat r)) -> Relation p r
+relationWithPlaceholder = relation' . placeholderDeprecated
 
 -- | Finalize 'QuerySimple' monad and generate 'Relation'.
 relation :: QuerySimple (Record Flat r) -> Relation () r

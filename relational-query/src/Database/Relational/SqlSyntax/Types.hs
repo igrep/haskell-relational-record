@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 
 -- |
 -- Module      : Database.Relational.SqlSyntax.Types
@@ -39,21 +40,30 @@ module Database.Relational.SqlSyntax.Types (
 
   -- * Column, Tuple, Record and Projection
   Column (..), Tuple, tupleWidth,
-  Record, untypeRecord, record, PI,
-  recordWidth,
-  typeFromRawColumns,
-  typeFromScalarSubQuery,
+  TypedTuple (TypedTuple), untypeTuple,
+  Record (Record), toTypedTuple, forciblyTypeTuple, mapTypedTuple, PI,
 
   -- * Predicate to restrict Query result
   Predicate,
+
+  -- * Manipulate placeholders referred in the statement.
+  PlaceholderOffsets,
+  WithPlaceholderOffsets (WithPlaceholderOffsets),
+  withPlaceholderOffsets,
+  SQLWithPlaceholderOffsets',
+  SQLWithPlaceholderOffsets,
+
   )  where
 
 import Prelude hiding (and, product)
+import Control.Monad.Trans.Writer (Writer, writer)
+import Data.DList (DList)
 import Data.Foldable (Foldable)
+import Data.Monoid (Monoid, mempty)
+import Data.Semigroup (Semigroup, (<>))
 import Data.Traversable (Traversable)
 
 import Database.Relational.Internal.Config (Config)
-import Database.Relational.Internal.ContextType (Flat, Aggregated)
 import Database.Relational.Internal.String (StringSQL)
 import Database.Relational.Internal.UntypedTable (Untyped)
 
@@ -96,16 +106,16 @@ data AggregateElem = ColumnRef AggregateColumnRef
                    deriving Show
 
 -- | Typeful aggregate element.
-newtype AggregateKey a = AggregateKey (a, AggregateElem)
+newtype AggregateKey a = AggregateKey (a, AggregateElem) deriving Functor
 
 -- | Sub-query type
 data SubQuery = Table Untyped
               | Flat Config
-                Tuple Duplication JoinProduct [Predicate Flat]
-                [OrderingTerm]
+                (WithPlaceholderOffsets Tuple) Duplication (WithPlaceholderOffsets JoinProduct) [WithPlaceholderOffsets Tuple]
+                (WithPlaceholderOffsets [OrderingTerm])
               | Aggregated Config
-                Tuple Duplication JoinProduct [Predicate Flat]
-                [AggregateElem] [Predicate Aggregated] [OrderingTerm]
+                (WithPlaceholderOffsets Tuple) Duplication (WithPlaceholderOffsets JoinProduct) [WithPlaceholderOffsets Tuple]
+                (WithPlaceholderOffsets [AggregateElem]) [WithPlaceholderOffsets Tuple] (WithPlaceholderOffsets [OrderingTerm])
               | Bin BinOp SubQuery SubQuery
               deriving Show
 
@@ -153,7 +163,7 @@ nodeTree :: Node rs -> ProductTree rs
 nodeTree (Node _ t) = t
 
 -- | Type for join product of query.
-type JoinProduct = Maybe (ProductTree [Predicate Flat])
+type JoinProduct = Maybe (ProductTree [Tuple])
 
 -- | when clauses
 data WhenClauses =
@@ -182,9 +192,13 @@ tupleWidth :: Tuple -> Int
 tupleWidth = length
 
 -- | Phantom typed record. Projected into Haskell record type 't'.
+newtype TypedTuple c t =
+  TypedTuple
+  { untypeTuple :: Tuple {- ^ Discard record type -} }  deriving Show
+
 newtype Record c t =
   Record
-  { untypeRecord :: Tuple {- ^ Discard record type -} }  deriving Show
+  { toTypedTuple :: WithPlaceholderOffsets (TypedTuple c t) } deriving Show
 
 -- | Type for predicate to restrict of query result.
 type Predicate c = Record c (Maybe Bool)
@@ -192,19 +206,30 @@ type Predicate c = Record c (Maybe Bool)
 -- | Type for projection function.
 type PI c a b = Record c a -> Record c b
 
--- | Unsafely type 'Tuple' value to 'Record' type.
-record :: Tuple -> Record c t
-record = Record
+mapTypedTuple :: (TypedTuple c t -> TypedTuple c' t') -> Record c t -> Record c' t'
+mapTypedTuple f = Record . fmap f . toTypedTuple
 
--- | Width of 'Record'.
-recordWidth :: Record c r -> Int
-recordWidth = length . untypeRecord
+-- igrep TODO: Rename into Placeholders
+type PlaceholderOffsets = DList Int
 
--- | Unsafely generate 'Record' from SQL string list.
-typeFromRawColumns :: [StringSQL] -- ^ SQL string list specifies columns
-                   -> Record c r  -- ^ Result 'Record'
-typeFromRawColumns =  record . map RawColumn
+newtype WithPlaceholderOffsets a =
+  WithPlaceholderOffsets (Writer PlaceholderOffsets a)
+  deriving (Show, Functor, Applicative, Foldable, Traversable)
 
--- | Unsafely generate 'Record' from scalar sub-query.
-typeFromScalarSubQuery :: SubQuery -> Record c t
-typeFromScalarSubQuery = record . (:[]) . Scalar
+type SQLWithPlaceholderOffsets' = WithPlaceholderOffsets StringSQL
+
+type SQLWithPlaceholderOffsets = WithPlaceholderOffsets String
+
+-- I wish I could use DerivingVia...
+instance Semigroup a => Semigroup (WithPlaceholderOffsets a) where
+  ma <> mb = (<>) <$> ma <*> mb
+
+instance Monoid a => Monoid (WithPlaceholderOffsets a) where
+  mempty = withPlaceholderOffsets mempty mempty
+
+withPlaceholderOffsets :: PlaceholderOffsets -> a -> WithPlaceholderOffsets a
+withPlaceholderOffsets phs x = WithPlaceholderOffsets $ writer (x, phs)
+
+-- | Unsafely type 'Tuple' value to 'TypedTuple' type.
+forciblyTypeTuple :: Tuple -> TypedTuple c t
+forciblyTypeTuple = TypedTuple
