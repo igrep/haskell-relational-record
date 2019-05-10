@@ -25,7 +25,6 @@ import Database.Relational.SqlSyntax
   (Duplication, Record, JoinProduct, NodeAttr,
    SubQuery, Tuple, Qualified, )
 
-import Database.Relational.Projectable (PlaceHolders)
 import Database.Relational.Monad.Class (MonadQualify, MonadQuery)
 import Database.Relational.Monad.Trans.Join (unsafeSubQueryWithAttr)
 import Database.Relational.Monad.Trans.Restricting (restrictings)
@@ -49,9 +48,9 @@ extract :: QueryUnique a
 extract (QueryUnique c) = extractCore c
 
 -- | Run 'SimpleQuery' to get 'SubQuery' with 'Qualify' computation.
-toSubQuery :: QueryUnique (PlaceHolders p, Record c r) -- ^ 'QueryUnique' to run
+toSubQuery :: QueryUnique (Record c r) -- ^ 'QueryUnique' to run
            -> ConfigureQuery SubQuery                                           -- ^ Result 'SubQuery' with 'Qualify' computation
 toSubQuery q = do
-  ((((_ph, pj), rs), pd), da) <- extract q
+  (((pj, rs), pd), da) <- extract q
   c <- askConfig
   return $ flatSubQuery c (untypeRecordWithPlaceholderOffsets pj) da pd rs mempty

@@ -31,25 +31,26 @@ module Database.Relational.Effect (
 
 import Data.Monoid ((<>))
 import Data.List (unfoldr)
-import Data.Functor.ProductIsomorphic (peRight)
 
 import Language.SQL.Keyword (Keyword(..))
 import Database.Record.Persistable (PersistableWidth)
 
 import Database.Relational.Internal.Config (Config (chunksInsertSize), defaultConfig)
+import Database.Relational.Internal.ContextType (PureOperand)
 import Database.Relational.Internal.String (stringSQL, showStringSQL)
 import Database.Relational.SqlSyntax
-  (composeWhere, composeSets, composeChunkValuesWithColumns, composeValuesListWithColumns,
+  (Record, composeWhere, composeSets, composeChunkValuesWithColumns, composeValuesListWithColumns,
    SQLWithPlaceholderOffsets', detachPlaceholderOffsets)
 
-import Database.Relational.Pi (Pi, id')
+import Database.Relational.Pi (Pi, id',)
+import Database.Relational.TupleInstances (fst', snd')
 import qualified Database.Relational.Pi.Unsafe as Pi
 import Database.Relational.Table (Table, TableDerivable, derivedTable)
 import qualified Database.Relational.Table as Table
 import qualified Database.Relational.Record as Record
 import Database.Relational.ProjectableClass (LiteralSQL)
-import Database.Relational.Projectable
-  (PlaceHolders, unitPH, pwPlaceholder, placeholder, (><), value, )
+import Database.Relational.Projectable (value,  (!))
+import Database.Relational.Monad.BaseType (pwPlaceholders, defaultPlaceholders)
 import Database.Relational.Monad.Trans.Assigning (assignings, (<-#))
 import Database.Relational.Monad.Restrict (RestrictedStatement)
 import qualified Database.Relational.Monad.Restrict as Restrict
@@ -57,119 +58,120 @@ import Database.Relational.Monad.Assign (AssignStatement)
 import qualified Database.Relational.Monad.Assign as Assign
 import Database.Relational.Monad.Register (Register)
 import qualified Database.Relational.Monad.Register as Register
+import Database.Relational.Monad.Trans.ReadPlaceholders (runReadPlaceholders, readPlaceholders, askPlaceholders)
 
 
 -- | Restriction type with place-holder parameter 'p' and projected record type 'r'.
-newtype Restriction p r = Restriction (RestrictedStatement r (PlaceHolders p))
+newtype Restriction p r = Restriction (RestrictedStatement p r ())
 
 -- | Finalize 'Restrict' monad and generate 'Restriction'.
-restriction :: RestrictedStatement r () -> Restriction () r
-restriction = Restriction . ((>> return unitPH) .)
+restriction :: RestrictedStatement () r () -> Restriction () r
+restriction = Restriction
 
 -- | Finalize 'Restrict' monad and generate 'Restriction' with place-holder parameter 'p'
-restriction' :: RestrictedStatement r (PlaceHolders p) -> Restriction p r
+restriction' :: RestrictedStatement p r () -> Restriction p r
 restriction' = Restriction
 
 runRestriction :: Restriction p r
-               -> RestrictedStatement r (PlaceHolders p)
+               -> RestrictedStatement p r ()
 runRestriction (Restriction qf) = qf
 
 -- | SQL WHERE clause 'StringSQL' string from 'Restriction'.
-sqlWhereFromRestriction :: Config -> Table r -> Restriction p r -> SQLWithPlaceholderOffsets'
-sqlWhereFromRestriction config tbl (Restriction q) = composeWhere <$> sequenceA rs
-  where (_ph, rs) = Restrict.extract (q $ Record.unsafeFromTable tbl) config
+sqlWhereFromRestriction :: Config -> Record PureOperand p -> Table r -> Restriction p r -> SQLWithPlaceholderOffsets'
+sqlWhereFromRestriction config phs tbl (Restriction q) = composeWhere <$> sequenceA rs
+  where (_ph, rs) = Restrict.extract (runReadPlaceholders (q $ Record.unsafeFromTable tbl) phs) config
 
 -- | Show where clause.
-instance TableDerivable r => Show (Restriction p r) where
-  show = showStringSQL . detachPlaceholderOffsets . sqlWhereFromRestriction defaultConfig derivedTable
+instance (PersistableWidth p, TableDerivable r) => Show (Restriction p r) where
+  show = showStringSQL . detachPlaceholderOffsets . sqlWhereFromRestriction defaultConfig defaultPlaceholders derivedTable
 
 
 -- | UpdateTarget type with place-holder parameter 'p' and projected record type 'r'.
-newtype UpdateTarget p r = UpdateTarget (AssignStatement r (PlaceHolders p))
+newtype UpdateTarget p r = UpdateTarget (AssignStatement p r ())
 
 -- | Finalize 'Target' monad and generate 'UpdateTarget'.
-updateTarget :: AssignStatement r ()
+updateTarget :: AssignStatement () r ()
              -> UpdateTarget () r
-updateTarget =  UpdateTarget . ((>> return unitPH) .)
+updateTarget =  UpdateTarget
 
 -- | Finalize 'Target' monad and generate 'UpdateTarget' with place-holder parameter 'p'.
-updateTarget' :: AssignStatement r (PlaceHolders p)
+updateTarget' :: AssignStatement p r ()
               -> UpdateTarget p r
 updateTarget' = UpdateTarget
 
-updateAllColumn :: PersistableWidth r
-                => Restriction p r
-                -> AssignStatement r (PlaceHolders (r, p))
-updateAllColumn rs proj = do
-  (ph0, ()) <- placeholder (\ph -> id' <-# ph)
-  ph1       <- assignings $ runRestriction rs proj
-  return $ ph0 >< ph1
-
 -- | Lift 'Restriction' to 'UpdateTarget'. Update target columns are all.
 liftTargetAllColumn :: PersistableWidth r
-                     => Restriction () r
-                     -> UpdateTarget r r
-liftTargetAllColumn rs = updateTarget' $ \proj -> fmap peRight $ updateAllColumn rs proj
+                    => Restriction () r
+                    -> UpdateTarget r r
+liftTargetAllColumn rs = updateTarget' $ \proj -> do
+  ph <- askPlaceholders
+  readPlaceholders $ do
+    id' <-# ph
+    assignings $ runReadPlaceholders (runRestriction rs proj) Record.pempty
+  return ()
 
 -- | Lift 'Restriction' to 'UpdateTarget'. Update target columns are all. With placefolder type 'p'.
-liftTargetAllColumn' :: PersistableWidth r
+liftTargetAllColumn' :: (PersistableWidth p, PersistableWidth r)
                      => Restriction p r
                      -> UpdateTarget (r, p) r
-liftTargetAllColumn' rs = updateTarget' $ updateAllColumn rs
+liftTargetAllColumn' rs = updateTarget' $ \proj -> do
+  ph <- askPlaceholders
+  readPlaceholders $ do
+    id' <-# ph ! fst'
+    assignings $ runReadPlaceholders (runRestriction rs proj) (ph ! snd')
+  return ()
 
 -- | Finalize 'Restrict' monad and generate 'UpdateTarget'. Update target columns are all.
 updateTargetAllColumn :: PersistableWidth r
-                      => RestrictedStatement r ()
+                      => RestrictedStatement () r ()
                       -> UpdateTarget r r
 updateTargetAllColumn = liftTargetAllColumn . restriction
 
 -- | Finalize 'Restrict' monad and generate 'UpdateTarget'. Update target columns are all. With placefolder type 'p'.
-updateTargetAllColumn' :: PersistableWidth r
-                       => RestrictedStatement r (PlaceHolders p)
+updateTargetAllColumn' :: (PersistableWidth p, PersistableWidth r)
+                       => RestrictedStatement p r ()
                        -> UpdateTarget (r, p) r
 updateTargetAllColumn' = liftTargetAllColumn' . restriction'
 
 
 -- | SQL SET clause and WHERE clause 'StringSQL' string from 'UpdateTarget'
-sqlFromUpdateTarget :: Config -> Table r -> UpdateTarget p r -> SQLWithPlaceholderOffsets'
-sqlFromUpdateTarget config tbl (UpdateTarget q) = (<>) <$> composeSets (asR tbl) <*> (composeWhere <$> sequenceA rs)
-  where ((_ph, asR), rs) = Assign.extract (q (Record.unsafeFromTable tbl)) config
+sqlFromUpdateTarget :: Config -> Record PureOperand p -> Table r -> UpdateTarget p r -> SQLWithPlaceholderOffsets'
+sqlFromUpdateTarget config phs tbl (UpdateTarget q) = (<>) <$> composeSets (asR tbl) <*> (composeWhere <$> sequenceA rs)
+  where ((_ph, asR), rs) = Assign.extract (runReadPlaceholders (q $ Record.unsafeFromTable tbl) phs) config
 
-instance TableDerivable r => Show (UpdateTarget p r) where
-  show = showStringSQL . detachPlaceholderOffsets . sqlFromUpdateTarget defaultConfig derivedTable
+instance (PersistableWidth p, TableDerivable r) => Show (UpdateTarget p r) where
+  show = showStringSQL . detachPlaceholderOffsets . sqlFromUpdateTarget defaultConfig defaultPlaceholders derivedTable
 
 
 -- | InsertTarget type with place-holder parameter 'p' and projected record type 'r'.
-newtype InsertTarget p r = InsertTarget (Register r (PlaceHolders p))
+newtype InsertTarget p r = InsertTarget (Register p r ())
 
 -- | Finalize 'Register' monad and generate 'InsertTarget'.
-insertTarget :: Register r ()
+insertTarget :: Register () r ()
              -> InsertTarget () r
-insertTarget =  InsertTarget . (>> return unitPH)
+insertTarget =  InsertTarget
 
 -- | Finalize 'Target' monad and generate 'UpdateTarget' with place-holder parameter 'p'.
-insertTarget' :: Register r (PlaceHolders p)
+insertTarget' :: Register p r ()
               -> InsertTarget p r
 insertTarget' = InsertTarget
 
 -- | parametalized 'Register' monad from 'Pi'
 piRegister :: PersistableWidth r
            => Pi r r'
-           -> Register r (PlaceHolders r')
-piRegister pi' = do
-  let (ph', ma) = pwPlaceholder (Pi.width' pi') (\ph -> pi' <-# ph)
-  () <- ma
-  return ph'
+           -> Register r' r ()
+piRegister pi' = readPlaceholders (pi' <-# pwPlaceholders (Pi.width' pi'))
 
 sqlChunkFromInsertTarget' :: Config
                           -> Int
+                          -> Record PureOperand p
                           -> Table r
                           -> InsertTarget p r
                           -> SQLWithPlaceholderOffsets'
-sqlChunkFromInsertTarget' config sz tbl (InsertTarget q) =
+sqlChunkFromInsertTarget' config sz phs tbl (InsertTarget q) =
     (\cs -> INSERT <> INTO <> stringSQL (Table.name tbl) <> cs) <$> composeChunkValuesWithColumns sz (asR tbl)
   where
-    (_ph, asR) = Register.extract q config
+    (_, asR) = Register.extract (runReadPlaceholders q phs) config
 
 countChunks :: Config
             -> Table r
@@ -182,16 +184,17 @@ countChunks config tbl =
 
 -- | Make 'StringSQL' string of SQL INSERT record chunk statement from 'InsertTarget'
 sqlChunkFromInsertTarget :: Config
+                         -> Record PureOperand p
                          -> Table r
                          -> InsertTarget p r
                          -> (SQLWithPlaceholderOffsets', Int)
-sqlChunkFromInsertTarget config tbl it =
-    (sqlChunkFromInsertTarget' config n tbl it, n)
+sqlChunkFromInsertTarget config phs tbl it =
+    (sqlChunkFromInsertTarget' config n phs tbl it, n)
   where
     n = countChunks config tbl
 
 -- | Make 'StringSQL' string of SQL INSERT statement from 'InsertTarget'
-sqlFromInsertTarget :: Config -> Table r -> InsertTarget p r -> SQLWithPlaceholderOffsets'
+sqlFromInsertTarget :: Config -> Record PureOperand p -> Table r -> InsertTarget p r -> SQLWithPlaceholderOffsets'
 sqlFromInsertTarget config = sqlChunkFromInsertTarget' config 1
 
 -- | Make 'StringSQL' strings of SQL INSERT strings from records list
@@ -207,7 +210,7 @@ sqlChunksFromRecordList config tbl pi' xs =
         composeValuesListWithColumns
         [ tf tbl
         | r <- rs
-        , let ((), tf) = Register.extract (pi' <-# value r) config
+        , let ((), tf) = Register.extract (pi' <-# Record.toFlat (value r)) config
         ]
     | rs <- unfoldr step xs
     ]

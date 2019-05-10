@@ -33,7 +33,7 @@ import Control.Arrow (second, (***))
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Last (Last, getLast))
 
-import Database.Relational.Internal.ContextType (Flat)
+import Database.Relational.Internal.ContextType (Flat, PureOperand)
 import Database.Relational.SqlSyntax
   (Duplication (All), NodeAttr (Just', Maybe), Predicate, Record,
    SubQuery, Qualified, JoinProduct, restrictProduct, growProduct,
@@ -44,7 +44,6 @@ import Database.Relational.SqlSyntax
 import Database.Relational.Monad.Trans.JoinState
   (JoinContext, primeJoinContext, updateProduct, joinProduct)
 import qualified Database.Relational.Record as Record
-import Database.Relational.Projectable (PlaceHolders, unsafeAddPlaceHolders)
 import Database.Relational.Monad.BaseType (ConfigureQuery, qualifyQuery, Relation, untypeRelation)
 import Database.Relational.Monad.Class (MonadQualify (..), MonadQuery (..))
 
@@ -80,8 +79,8 @@ instance MonadQuery (QueryJoin ConfigureQuery) where
   setDuplication     = QueryJoin . lift . tell . Last . Just
   restrictJoin       = updateJoinRestriction
   query'             = queryWithAttr Just'
-  queryMaybe'        =
-    fmap (second Record.just) . queryWithAttr Maybe
+  queryMaybe' phs    =
+    fmap Record.just . queryWithAttr Maybe phs
 
 -- | Unsafely join sub-query with this query.
 unsafeSubQueryWithAttr :: Monad q
@@ -95,14 +94,14 @@ unsafeSubQueryWithAttr attr qsub = do
 
 -- | Basic monadic join operation using 'MonadQuery'.
 queryWithAttr :: NodeAttr
+              -> Record PureOperand p
               -> Relation p r
-              -> QueryJoin ConfigureQuery (PlaceHolders p, Record c r)
-queryWithAttr attr = unsafeAddPlaceHolders . run where
-  run rel = do
-    q <- liftQualify $ do
-      sq <- untypeRelation rel
-      qualifyQuery sq
-    unsafeSubQueryWithAttr attr q
+              -> QueryJoin ConfigureQuery (Record c r)
+queryWithAttr attr phs rel = do
+  q <- liftQualify $ do
+    sq <- untypeRelation rel phs
+    qualifyQuery sq
+  unsafeSubQueryWithAttr attr q
 
 -- | Run 'QueryJoin' to get 'JoinProduct'
 extractProduct :: Functor m => QueryJoin m a -> m ((a, WithPlaceholderOffsets JoinProduct), Duplication)

@@ -48,7 +48,7 @@ unsafePool :: (FromSql SqlValue s, PersistableWidth s,
 unsafePool connAct sz seqt = withConnectionIO connAct $ \conn -> do
   let t      = seqTable seqt
       name   = Table.name t
-  pq    <- prepareQuery conn $ relationalQuery' (Relation.table t) [FOR, UPDATE]
+  pq    <- prepareQuery conn $ relationalQuery' Relation.pempty (Relation.table t) [FOR, UPDATE]
 
   es    <- executeBound $ pq `bind` ()
   seq0  <- maybe

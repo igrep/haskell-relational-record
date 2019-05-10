@@ -39,11 +39,11 @@ import Language.Haskell.TH (Q, runIO, Name, TypeQ, Type (AppT, ConT), Dec)
 import Language.Haskell.TH.Name.CamelCase (varCamelcaseName)
 import Language.Haskell.TH.Lib.Extra (reportWarning, reportError)
 
-import Database.Record (ToSql, FromSql)
+import Database.Record (ToSql, FromSql, PersistableWidth)
 import Database.Record.TH (recordTemplate, defineSqlPersistableInstances)
 import Database.Relational
   (Config, nameConfig, recordConfig, enableWarning, verboseAsCompilerWarning,
-   defaultConfig, Relation, relationalQuerySQL, QuerySuffix)
+   defaultConfig, Relation, relationalQuerySQL, QuerySuffix, defaultPlaceholders)
 import qualified Database.Relational.TH as Relational
 
 import Database.HDBC.Session (withConnectionIO)
@@ -54,7 +54,7 @@ import Database.HDBC.Schema.Driver
 
 
 defineInstancesForSqlValue :: TypeQ   -- ^ Record type constructor.
-                          -> Q [Dec] -- ^ Instance declarations.
+                           -> Q [Dec] -- ^ Instance declarations.
 defineInstancesForSqlValue typeCon = do
   [d| instance FromSql SqlValue $typeCon
       instance ToSql SqlValue $typeCon
@@ -171,7 +171,7 @@ defineTableFromDB :: IConnection conn
 defineTableFromDB connect driver tbl scm = tableAlongWithSchema connect driver tbl scm []
 
 -- | Verify composed 'Query' and inline it in compile type.
-inlineVerifiedQuery :: IConnection conn
+inlineVerifiedQuery :: (IConnection conn, PersistableWidth p)
                     => IO conn      -- ^ Connect action to system catalog database
                     -> Name         -- ^ Top-level variable name which has 'Relation' type
                     -> Relation p r -- ^ Object which has 'Relation' type
@@ -181,7 +181,7 @@ inlineVerifiedQuery :: IConnection conn
                     -> Q [Dec]      -- ^ Result declarations
 inlineVerifiedQuery connect relVar rel config sufs qns = do
   (p, r) <- Relational.reifyRelation relVar
-  let sql = relationalQuerySQL config rel sufs
+  let sql = show $ relationalQuerySQL config defaultPlaceholders rel sufs
   when (verboseAsCompilerWarning config) . reportWarning $ "Verify with prepare: " ++ sql
   void . runIO $ withConnectionIO connect (\conn -> prepare conn sql)
   Relational.unsafeInlineQuery (return p) (return r) sql (varCamelcaseName qns)

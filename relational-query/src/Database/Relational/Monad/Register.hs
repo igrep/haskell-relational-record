@@ -21,10 +21,11 @@ import Database.Relational.SqlSyntax (Assignment, WithPlaceholderOffsets)
 import Database.Relational.Table (Table)
 import Database.Relational.Monad.BaseType (ConfigureQuery, configureQuery)
 import Database.Relational.Monad.Trans.Assigning (Assignings, extractAssignments)
+import Database.Relational.Monad.Trans.ReadPlaceholders (ReadPlaceholders,)
 
 
 -- | Target register monad type used from insert statement.
-type Register r = Assignings r ConfigureQuery
+type Register p r = ReadPlaceholders p (Assignings r ConfigureQuery)
 
 -- | Run 'InsertStatement'.
 extract :: Assignings r ConfigureQuery a -> Config -> (a, Table r -> WithPlaceholderOffsets [Assignment])

@@ -33,7 +33,7 @@ module Database.Relational.Arrow (
 
   uniqueQuery', uniqueQueryMaybe',
 
-  on, wheres, having, groupBy, placeholder,
+  on, wheres, having, groupBy,
 
   relation, relation', aggregateRelation, aggregateRelation',
 
@@ -78,7 +78,7 @@ import Database.Relational hiding
    query, queryMaybe, query', queryMaybe',
    queryList, queryList', queryScalar, queryScalar',
    uniqueQuery', uniqueQueryMaybe',
-   on, wheres, having, groupBy, placeholder,
+   on, wheres, having, groupBy,
    relation, relation', aggregateRelation, aggregateRelation', uniqueRelation',
    groupBy', key, key', set, bkey, rollup, cube, groupingSets,
    orderBy', orderBy, asc, desc, partitionBy, over,
@@ -89,7 +89,8 @@ import Database.Relational hiding
    QuerySimple, QueryAggregate, QueryUnique, Orderings, Window, Register)
 import qualified Database.Relational as Monadic
 import qualified Database.Relational.Monad.Trans.Aggregating as Monadic
-import qualified Database.Relational.Monad.Trans.Assigning as Monadic
+import qualified Database.Relational.Monad.Trans.Assigning as MonadicAssigning
+import qualified Database.Relational.Monad.Trans.ReadPlaceholders as Monadic
 
 
 -- | Arrow to build queries.
@@ -129,16 +130,16 @@ type Orderings c m = QueryA (Monadic.Orderings c m)
 type Window c = QueryA (Monadic.Window c)
 
 -- | Arrow type corresponding to 'Monadic.Assignings'
-type Assignings r m = QueryA (Monadic.Assignings r m)
+type Assignings p r m = QueryA (Monadic.ReadPlaceholders p (MonadicAssigning.Assignings r m))
 
 -- | Arrow type corresponding to 'Monadic.AssignStatement'
-type AssignStatement r a = Assignings r Restrict (Record Flat r) a
+type AssignStatement p r a = QueryA (Monadic.ReadPlaceholders p (Monadic.Assign r)) (Record Flat r) a
 
 -- | Arrow type corresponding to 'Monadic.Register'
-type Register r a = QueryA (Monadic.Register r) () a
+type Register p r a = QueryA (Monadic.Register p r) () a
 
 -- | Arrow type corresponding to 'Monadic.RestrictedStatement'
-type RestrictedStatement r a = QueryA Monadic.Restrict (Record Flat r) a
+type RestrictedStatement p r a = QueryA (Monadic.ReadPlaceholders p Monadic.Restrict) (Record Flat r) a
 
 
 -- | Same as 'Monadic.all''. Arrow version.
@@ -164,24 +165,24 @@ queryMaybe r = queryA $ \() -> Monadic.queryMaybe r
 -- | Same as 'Monadic.query''. Arrow version.
 --   The result arrow is not injected by any local projected records.
 query' :: (MonadQualify ConfigureQuery m, MonadQuery m)
-       => Relation p r -> QueryA m () (PlaceHolders p, Record Flat r)
-query' r = queryA $ \() -> Monadic.query' r
+       => Relation p r -> QueryA m (Record PureOperand p) (Record Flat r)
+query' r = queryA $ \phs -> Monadic.query' phs r
 
 -- | Same as 'Monadic.queryMaybe''. Arrow version.
 --   The result arrow is not injected by any local projected records.
 queryMaybe' :: (MonadQualify ConfigureQuery m, MonadQuery m)
-            => Relation p r -> QueryA m () (PlaceHolders p, Record Flat (Maybe r))
-queryMaybe' r = queryA $ \() -> Monadic.queryMaybe' r
+            => Relation p r -> QueryA m (Record PureOperand p) (Record Flat (Maybe r))
+queryMaybe' r = queryA $ \phs -> Monadic.queryMaybe' phs r
 
 unsafeQueryList :: MonadQualify ConfigureQuery m
-            => (a -> Relation () r)
-            -> QueryA m a (RecordList (Record c) r)
+                => (a -> Relation () r)
+                -> QueryA m a (RecordList (Record c) r)
 unsafeQueryList rf = queryA $ Monadic.queryList . rf
 
 unsafeQueryList' :: MonadQualify ConfigureQuery m
-             => (a -> Relation p r)
-             -> QueryA m a (PlaceHolders p, RecordList (Record c) r)
-unsafeQueryList' rf = queryA $ Monadic.queryList' . rf
+                 => (a -> Relation p r)
+                 -> QueryA m (Record PureOperand p, a) (RecordList (Record c) r)
+unsafeQueryList' rf = queryA $ \(phs, x) -> Monadic.queryList' phs $ rf x
 
 -- | Same as 'Monadic.queryList'. Arrow version.
 --   The result arrow is designed to be injected by local projected records.
@@ -194,7 +195,7 @@ queryList = unsafeQueryList
 --   The result arrow is designed to be injected by local projected records.
 queryList' :: MonadQualify ConfigureQuery m
            => (Record c a -> Relation p r)
-           -> QueryA m (Record c a) (PlaceHolders p, RecordList (Record c) r)
+           -> QueryA m (Record PureOperand p, Record c a) (RecordList (Record c) r)
 queryList' = unsafeQueryList'
 
 -- | Same as 'Monadic.queryList' to pass this result to 'exists' operator. Arrow version.
@@ -208,7 +209,7 @@ queryExists = unsafeQueryList
 --   The result arrow is designed to be injected by local projected records.
 queryExists' :: MonadQualify ConfigureQuery m
            => (Record c a -> Relation p r)
-           -> QueryA m (Record c a) (PlaceHolders p, RecordList (Record Exists) r)
+           -> QueryA m (Record PureOperand p, Record c a) (RecordList (Record Exists) r)
 queryExists' = unsafeQueryList'
 
 -- | Same as 'Monadic.queryList'. Arrow version.
@@ -222,8 +223,8 @@ queryListU r = unsafeQueryList $ \() -> r
 --   Useful for no reference cases to local projected records.
 queryListU' :: MonadQualify ConfigureQuery m
            => Relation p r
-           -> QueryA m () (PlaceHolders p, RecordList (Record c) r)
-queryListU' r = unsafeQueryList' $ \() -> r
+           -> QueryA m (Record PureOperand p) (RecordList (Record c) r)
+queryListU' r = queryA $ \phs -> Monadic.queryList' phs r
 
 unsafeQueryScalar :: (MonadQualify ConfigureQuery m, ScalarDegree r)
                   => (a -> UniqueRelation () c r)
@@ -232,8 +233,8 @@ unsafeQueryScalar rf = queryA $ Monadic.queryScalar . rf
 
 unsafeQueryScalar' :: (MonadQualify ConfigureQuery m, ScalarDegree r)
                    => (a -> UniqueRelation p c r)
-                   -> QueryA m a (PlaceHolders p, Record c (Maybe r))
-unsafeQueryScalar' rf = queryA $ Monadic.queryScalar' . rf
+                   -> QueryA m (Record PureOperand p, a) (Record c (Maybe r))
+unsafeQueryScalar' rf = queryA $ \(phs, x) ->  Monadic.queryScalar' phs $ rf x
 
 -- | Same as 'Monadic.queryScalar'. Arrow version.
 --   The result arrow is designed to be injected by any local projected record.
@@ -246,7 +247,7 @@ queryScalar = unsafeQueryScalar
 --   The result arrow is designed to be injected by any local projected record.
 queryScalar' :: (MonadQualify ConfigureQuery m, ScalarDegree r)
              => (Record c a -> UniqueRelation p c r)
-             -> QueryA m (Record c a) (PlaceHolders p, Record c (Maybe r))
+             -> QueryA m (Record PureOperand p, Record c a) (Record c (Maybe r))
 queryScalar' = unsafeQueryScalar'
 
 -- | Same as 'Monadic.queryScalar'. Arrow version.
@@ -260,20 +261,20 @@ queryScalarU r = unsafeQueryScalar $ \() -> r
 --   Useful for no reference cases to local projected records.
 queryScalarU' :: (MonadQualify ConfigureQuery m, ScalarDegree r)
              => UniqueRelation p c r
-             -> QueryA m () (PlaceHolders p, Record c (Maybe r))
-queryScalarU' r = unsafeQueryScalar' $ \() -> r
+             -> QueryA m (Record PureOperand p) (Record c (Maybe r))
+queryScalarU' r = queryA $ \phs -> Monadic.queryScalar' phs r
 
 -- | Same as 'Monadic.uniqueQuery''. Arrow version.
 --   The result arrow is not injected by local projected records.
 uniqueQuery' :: UniqueRelation p c r
-             -> QueryA Monadic.QueryUnique () (PlaceHolders p, Record c r)
-uniqueQuery' r = queryA $ \() -> Monadic.uniqueQuery' r
+             -> QueryA Monadic.QueryUnique (Record PureOperand p) (Record c r)
+uniqueQuery' r = queryA $ \phs -> Monadic.uniqueQuery' phs r
 
 -- | Same as 'Monadic.uniqueQueryMaybe''. Arrow version.
 --   The result arrow is not injected by local projected records.
 uniqueQueryMaybe' :: UniqueRelation p c r
-                  -> QueryA Monadic.QueryUnique () (PlaceHolders p, Record c (Maybe r))
-uniqueQueryMaybe' r = queryA $ \() -> Monadic.uniqueQueryMaybe' r
+                  -> QueryA Monadic.QueryUnique (Record PureOperand p) (Record c (Maybe r))
+uniqueQueryMaybe' r = queryA $ \phs -> Monadic.uniqueQueryMaybe' phs r
 
 -- | Same as 'Monadic.on'. Arrow version.
 --   The result arrow is designed to be injected by local conditional flat-records.
@@ -299,12 +300,6 @@ groupBy :: MonadAggregate m
         => QueryA m (Record Flat r) (Record Aggregated r)
 groupBy = queryA Monadic.groupBy
 
--- | Same as 'Monadic.placeholder'. Arrow version.
---   The result arrow is designed to be injected by locally built arrow using placeholders.
-placeholder :: (PersistableWidth t, SqlContext c, Monad m)
-            => QueryA m (QueryA m (Record c t) a) (PlaceHolders t, a)
-placeholder = queryA $ Monadic.placeholder . runQueryA
-
 -- | Same as 'Monadic.relation'.
 --   Finalize query-building arrow instead of query-building monad.
 relation :: QuerySimple () (Record Flat r)
@@ -313,9 +308,10 @@ relation = runAofM Monadic.relation
 
 -- | Same as 'Monadic.relation''.
 --   Finalize query-building arrow instead of query-building monad.
-relation' :: QuerySimple () (PlaceHolders p, Record Flat r)
+relation' :: PersistableWidth p
+          => QuerySimple (Record PureOperand p) (Record Flat r)
           -> Relation p r
-relation' = runAofM Monadic.relation'
+relation' = Monadic.relation' . runQueryA
 
 -- | Same as 'Monadic.aggregateRelation'.
 --   Finalize query-building arrow instead of query-building monad.
@@ -325,15 +321,17 @@ aggregateRelation = runAofM Monadic.aggregateRelation
 
 -- | Same as 'Monadic.aggregateRelation''.
 --   Finalize query-building arrow instead of query-building monad.
-aggregateRelation' :: QueryAggregate () (PlaceHolders p, Record Aggregated r)
+aggregateRelation' :: PersistableWidth p
+                   => QueryAggregate (Record PureOperand p) (Record Aggregated r)
                    -> Relation p r
-aggregateRelation' = runAofM Monadic.aggregateRelation'
+aggregateRelation' = Monadic.aggregateRelation' . runQueryA
 
 -- | Same as 'Monadic.uniqueRelation''.
 --   Finalize query-building arrow instead of query-building monad.
-uniqueRelation' :: QueryUnique () (PlaceHolders p, Record c r)
+uniqueRelation' :: PersistableWidth p
+                => QueryUnique (Record PureOperand p) (Record c r)
                 -> UniqueRelation p c r
-uniqueRelation' = runAofM Monadic.uniqueRelation'
+uniqueRelation' = Monadic.uniqueRelation' . runQueryA
 
 -- | Same as 'Monadic.groupBy''.
 --   This arrow is designed to be injected by local 'AggregateKey'.
@@ -418,105 +416,107 @@ infix 8 `over`
 -- | Make 'Monadic.AssignTarget' into arrow which is designed to be
 --   injected by assignees of local projected record.
 assign :: Monad m
-       => Monadic.AssignTarget r v
-       -> Assignings r m (Record Flat v) ()
+       => MonadicAssigning.AssignTarget r v
+       -> Assignings p r m (Record Flat v) ()
 assign t = queryA (`Monadic.assignTo` t)
 
 -- | Same as 'Monadic.update''.
 --   Make 'Update' from assigning statement arrow using configuration.
-update' :: TableDerivable r => Config -> AssignStatement r (PlaceHolders p) -> Update p
-update' config = Monadic.update' config . runQueryA
+update' :: TableDerivable r => Config -> Record PureOperand p -> AssignStatement p r () -> Update p
+update' config phs = Monadic.update' config phs . runQueryA
 
 -- | Same as 'Monadic.update'.
 --   Make 'Update' from assigning statement arrow.
-update :: TableDerivable r => AssignStatement r (PlaceHolders p) -> Update p
-update = Monadic.update . runQueryA
+update :: TableDerivable r => Record PureOperand p -> AssignStatement p r () -> Update p
+update phs = Monadic.update phs . runQueryA
 
 -- | Same as 'Monadic.updateNoPH'.
 --   Make 'Update' from assigning statement arrow.
-updateNoPH :: TableDerivable r => AssignStatement r () -> Update ()
+updateNoPH :: TableDerivable r => AssignStatement () r () -> Update ()
 updateNoPH = Monadic.updateNoPH . runQueryA
 
 -- | Same as 'Monadic.updateAllColumn''.
 --   Make 'Update' from restrected statement arrow.
-updateAllColumn' :: (PersistableWidth r, TableDerivable r)
+updateAllColumn' :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
                  => Config
-                 -> RestrictedStatement r (PlaceHolders p)
+                 -> Record PureOperand (r, p)
+                 -> RestrictedStatement p r ()
                  -> Update (r, p)
-updateAllColumn' config = Monadic.updateAllColumn' config . runQueryA
+updateAllColumn' config phs = Monadic.updateAllColumn' config phs . runQueryA
 
 -- | Same as 'Monadic.updateAllColumn'.
 --   Make 'Update' from restrected statement arrow.
-updateAllColumn :: (PersistableWidth r, TableDerivable r)
-                => RestrictedStatement r (PlaceHolders p)
+updateAllColumn :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
+                => Record PureOperand (r, p)
+                -> RestrictedStatement p r ()
                 -> Update (r, p)
-updateAllColumn = Monadic.updateAllColumn . runQueryA
+updateAllColumn phs = Monadic.updateAllColumn phs . runQueryA
 
 -- | Same as 'Monadic.updateAllColumnNoPH'.
 --   Make 'Update' from restrected statement arrow.
 updateAllColumnNoPH :: (PersistableWidth r, TableDerivable r)
-                    => RestrictedStatement r ()
+                    => RestrictedStatement () r ()
                     -> Update r
 updateAllColumnNoPH = Monadic.updateAllColumnNoPH . runQueryA
 
 -- | Same as 'Monadic.insertValue''.
 --   Make 'Insert' from register arrow using configuration.
-insertValue' :: TableDerivable r => Config -> Register r (PlaceHolders p) -> Insert p
-insertValue' config = Monadic.insertValue' config . ($ ()) . runQueryA
+insertValue' :: TableDerivable r => Config -> Record PureOperand p -> Register p r () -> Insert p
+insertValue' config phs = Monadic.insertValue' config phs . ($ ()) . runQueryA
 
 -- | Same as 'Monadic.insertValue'.
 --   Make 'Insert' from register arrow.
-insertValue :: TableDerivable r => Register r (PlaceHolders p) -> Insert p
-insertValue = Monadic.insertValue . ($ ()) . runQueryA
+insertValue :: TableDerivable r => Record PureOperand p -> Register p r () -> Insert p
+insertValue phs = Monadic.insertValue phs . ($ ()) . runQueryA
 
 -- | Same as 'Monadic.insertValueNoPH'.
 --   Make 'Insert' from register arrow.
-insertValueNoPH :: TableDerivable r => Register r () -> Insert ()
+insertValueNoPH :: TableDerivable r => Register () r () -> Insert ()
 insertValueNoPH = Monadic.insertValueNoPH . ($ ()) . runQueryA
 
 
 -- | Same as 'Monadic.delete''.
 --   Make 'Update' from restrict statement arrow using configuration.
-delete' :: TableDerivable r => Config -> RestrictedStatement r (PlaceHolders p) -> Delete p
-delete' config = Monadic.delete' config . runQueryA
+delete' :: TableDerivable r => Config -> Record PureOperand p -> RestrictedStatement p r () -> Delete p
+delete' config phs = Monadic.delete' config phs . runQueryA
 
 -- | Same as 'Monadic.delete'.
 --   Make 'Update' from restrict statement arrow.
-delete :: TableDerivable r => RestrictedStatement r (PlaceHolders p) -> Delete p
-delete = Monadic.delete . runQueryA
+delete :: TableDerivable r => Record PureOperand p -> RestrictedStatement p r () -> Delete p
+delete phs = Monadic.delete phs . runQueryA
 
 -- | Same as 'Monadic.deleteNoPH'.
 --   Make 'Update' from restrict statement arrow.
-deleteNoPH :: TableDerivable r => RestrictedStatement r () -> Delete ()
+deleteNoPH :: TableDerivable r => RestrictedStatement () r () -> Delete ()
 deleteNoPH = Monadic.deleteNoPH . runQueryA
 
 {-# DEPRECATED derivedUpdate' "use `update'` instead of this." #-}
 -- | Same as 'Monadic.update''.
 --   Make 'Update' from assigning statement arrow using configuration.
-derivedUpdate' :: TableDerivable r => Config -> AssignStatement r (PlaceHolders p) -> Update p
+derivedUpdate' :: TableDerivable r => Config -> Record PureOperand p -> AssignStatement p r () -> Update p
 derivedUpdate' = update'
 
 {-# DEPRECATED derivedUpdate "use `update` instead of this." #-}
 -- | Deprecated.
-derivedUpdate :: TableDerivable r => AssignStatement r (PlaceHolders p) -> Update p
+derivedUpdate :: TableDerivable r => Record PureOperand p -> AssignStatement p r () -> Update p
 derivedUpdate = update
 
 {-# DEPRECATED derivedInsertValue' "use `insertValue'` instead of this." #-}
 -- | Deprecated.
-derivedInsertValue' :: TableDerivable r => Config -> Register r (PlaceHolders p) -> Insert p
+derivedInsertValue' :: TableDerivable r => Config -> Record PureOperand p -> Register p r () -> Insert p
 derivedInsertValue' = insertValue'
 
 {-# DEPRECATED derivedInsertValue "use `insertValue` instead of this." #-}
 -- | Deprecated.
-derivedInsertValue :: TableDerivable r => Register r (PlaceHolders p) -> Insert p
+derivedInsertValue :: TableDerivable r => Record PureOperand p -> Register p r () -> Insert p
 derivedInsertValue = insertValue
 
 {-# DEPRECATED derivedDelete' "use `derivedDelete'` instead of this." #-}
 -- | Deprecated.
-derivedDelete' :: TableDerivable r => Config -> RestrictedStatement r (PlaceHolders p) -> Delete p
+derivedDelete' :: TableDerivable r => Config -> Record PureOperand p -> RestrictedStatement p r () -> Delete p
 derivedDelete' = delete'
 
 {-# DEPRECATED derivedDelete "use `derivedDelete` instead of this." #-}
 -- | Deprecated.
-derivedDelete :: TableDerivable r => RestrictedStatement r (PlaceHolders p) -> Delete p
+derivedDelete :: TableDerivable r => Record PureOperand p -> RestrictedStatement p r () -> Delete p
 derivedDelete = delete

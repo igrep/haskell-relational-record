@@ -20,6 +20,7 @@ module Database.Relational.Record (
   columns,
   columnsWithPlaceholders,
   untype,
+  pempty,
 
   unsafeFromSqlTerms,
   unsafeFromQualifiedSubQuery,
@@ -36,6 +37,7 @@ module Database.Relational.Record (
   flattenMaybe, just,
 
   unsafeToAggregated, unsafeToFlat, unsafeChangeContext,
+  toAggregated, toFlat, toSomeOperatorContext,
   unsafeStringSqlNotNullMaybe,
 
   -- * List of Record
@@ -55,7 +57,7 @@ import Database.Record (HasColumnConstraint, NotNull, NotNullColumnConstraint, P
 import Database.Record.Persistable (PersistableRecordWidth)
 import qualified Database.Record.KeyConstraint as KeyConstraint
 
-import Database.Relational.Internal.ContextType (Aggregated, Flat)
+import Database.Relational.Internal.ContextType (Aggregated, Flat, PureOperand)
 import Database.Relational.Internal.String (StringSQL, listStringSQL, rowStringSQL)
 import Database.Relational.SqlSyntax
   (SubQuery, Qualified, Tuple, Record,
@@ -66,6 +68,7 @@ import Database.Relational.Table (Table)
 import qualified Database.Relational.Table as Table
 import Database.Relational.Pi (Pi)
 import qualified Database.Relational.Pi.Unsafe as UnsafePi
+import Database.Relational.Projectable.Unsafe (OperatorContext)
 
 
 -- | Unsafely get SQL term from 'Record'.
@@ -112,7 +115,6 @@ unsafeFromTable = Syntax.typeFromRawColumns mempty . Table.columns
 -- | Unsafely generate 'Record' from SQL expression strings.
 unsafeFromSqlTerms :: Syntax.WithPlaceholderOffsets [StringSQL] -> Record c t
 unsafeFromSqlTerms = uncurry (flip Syntax.typeFromRawColumns) . Syntax.tupleFromPlaceholderOffsets
-
 
 -- | Unsafely trace projection path.
 unsafeProject :: PersistableRecordWidth a -> Record c a' -> Pi a b -> Record c b'
@@ -176,6 +178,18 @@ unsafeToAggregated =  unsafeChangeContext
 -- | Unsafely down to flat context.
 unsafeToFlat :: Record Aggregated r -> Record Flat r
 unsafeToFlat =  unsafeChangeContext
+
+-- | Convert pure operand context into aggregated context.
+toAggregated :: Record PureOperand r -> Record Aggregated r
+toAggregated =  unsafeChangeContext
+
+-- | Convert pure operand context into flat context.
+toFlat :: Record PureOperand r -> Record Flat r
+toFlat =  unsafeChangeContext
+
+-- | Convert pure operand context into some operator context.
+toSomeOperatorContext :: OperatorContext c => Record PureOperand r -> Record c r
+toSomeOperatorContext =  unsafeChangeContext
 
 notNullMaybeConstraint :: HasColumnConstraint NotNull r => Record c (Maybe r) -> NotNullColumnConstraint r
 notNullMaybeConstraint =  const KeyConstraint.columnConstraint

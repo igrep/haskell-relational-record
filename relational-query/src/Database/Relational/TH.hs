@@ -84,6 +84,7 @@ import Database.Record.TH
   (columnOffsetsVarNameDefault, recordTypeName, recordTemplate,
    defineRecordTypeWithConfig, defineHasColumnConstraintInstance)
 import qualified Database.Record.TH as Record
+import Database.Record.Persistable (PersistableWidth)
 
 import Database.Relational
   (Table, Pi, id', Relation, LiteralSQL,
@@ -92,7 +93,8 @@ import Database.Relational
            schemaNameMode, nameConfig, identifierQuotation),
    relationalQuerySQL, Query, relationalQuery, KeyUpdate,
    Insert, insert, InsertQuery, insertQuery,
-   HasConstraintKey(constraintKey), Primary, NotNull, primarySelect, primaryUpdate)
+   HasConstraintKey(constraintKey), Primary, NotNull, primarySelect, primaryUpdate,
+   defaultPlaceholders, )
 
 import Database.Relational.SqlSyntax (attachEmptyPlaceholderOffsets, detachPlaceholderOffsets,)
 import Database.Relational.InternalTH.Base (defineTuplePi, defineRecordProjections)
@@ -221,10 +223,10 @@ defineTableDerivations tableVar' relVar' insVar' insQVar' recordType' = do
              [| derivedRelation |]
   let insVar   = varName insVar'
   insDs   <- simpleValD insVar   [t| Insert $recordType' |]
-             [| insert id' |]
+             [| insert defaultPlaceholders id' |]
   let insQVar  = varName insQVar'
-  insQDs  <- simpleValD insQVar  [t| forall p . Relation p $recordType' -> InsertQuery p |]
-             [| insertQuery id' |]
+  insQDs  <- simpleValD insQVar  [t| forall p. PersistableWidth p => Relation p $recordType' -> InsertQuery p |]
+             [| insertQuery defaultPlaceholders id' |]
   return $ concat [tableDs, relDs, insDs, insQDs]
 
 -- | 'Table' and 'Relation' templates.
@@ -344,7 +346,7 @@ definePrimaryQuery toDef' paramType recType relE = do
   let toDef = varName toDef'
   simpleValD toDef
     [t| Query $paramType $recType |]
-    [|  relationalQuery (primarySelect $relE) |]
+    [|  relationalQuery defaultPlaceholders (primarySelect $relE) |]
 
 -- | Template of derived primary 'Update'.
 definePrimaryUpdate :: VarName -- ^ Variable name of result declaration
@@ -447,7 +449,8 @@ reifyRelation relVar = do
       fail $ "expandRelation: Variable must have Relation type: " ++ show relVar
 
 -- | Inlining composed 'Query' in compile type.
-inlineQuery :: Name         -- ^ Top-level variable name which has 'Relation' type
+inlineQuery :: PersistableWidth p
+            => Name         -- ^ Top-level variable name which has 'Relation' type
             -> Relation p r -- ^ Object which has 'Relation' type
             -> Config       -- ^ Configuration to generate SQL
             -> QuerySuffix  -- ^ suffix SQL words
@@ -456,7 +459,7 @@ inlineQuery :: Name         -- ^ Top-level variable name which has 'Relation' ty
 inlineQuery relVar rel config sufs qns = do
   (p, r) <- reifyRelation relVar
   unsafeInlineQuery (return p) (return r)
-    (detachPlaceholderOffsets $ relationalQuerySQL config rel sufs)
+    (detachPlaceholderOffsets $ relationalQuerySQL config defaultPlaceholders rel sufs)
     (varCamelcaseName qns)
 
 -- | Generate all templates against defined record like type constructor

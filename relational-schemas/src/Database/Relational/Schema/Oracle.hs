@@ -75,20 +75,20 @@ getType mapFromSql cols = do
 
 -- | 'Relation' to query 'DbaTabColumns' from owner name and table name.
 columnsRelationFromTable :: Relation (String, String) DbaTabColumns
-columnsRelationFromTable = relationWithPlaceholder $ \ph -> do
+columnsRelationFromTable = relation' $ \ph -> do
     cols <- query dbaTabColumns
-    wheres $ cols ! Cols.owner' .=. ph ! fst'
-    wheres $ cols ! Cols.tableName' .=. ph ! snd'
+    wheres $ cols ! Cols.owner' .=. toFlat (ph ! fst')
+    wheres $ cols ! Cols.tableName' .=. toFlat (ph ! snd')
     asc $ cols ! Cols.columnId'
     return cols
 
 -- | Phantom typed 'Query' to get 'DbaTabColumns' from owner name and table name.
 columnsQuerySQL :: Query (String, String) DbaTabColumns
-columnsQuerySQL = relationalQuery columnsRelationFromTable
+columnsQuerySQL = relationalQuery defaultPlaceholders columnsRelationFromTable
 
 -- | 'Relation' to query primary key name from owner name and table name.
 primaryKeyRelation :: Relation (String, String) (Maybe String)
-primaryKeyRelation = relationWithPlaceholder $ \ph -> do
+primaryKeyRelation = relation' $ \ph -> do
     cons <- query dbaConstraints
     cols <- query dbaTabColumns
     consCols <- query dbaConsColumns
@@ -98,11 +98,11 @@ primaryKeyRelation = relationWithPlaceholder $ \ph -> do
     wheres $ consCols ! ConsCols.columnName' .=. just (cols ! Cols.columnName')
     wheres $ cons ! Cons.constraintName' .=. consCols ! ConsCols.constraintName'
 
-    wheres $ cols ! Cols.nullable' .=. just (value "N")
-    wheres $ cons ! Cons.constraintType' .=. just (value "P")
+    wheres $ cols ! Cols.nullable' .=. just (toFlat $ value "N")
+    wheres $ cons ! Cons.constraintType' .=. just (toFlat $ value "P")
 
-    wheres $ cons ! Cons.owner' .=. just (ph ! fst')
-    wheres $ cons ! Cons.tableName' .=. (ph ! snd')
+    wheres $ cons ! Cons.owner' .=. just (toFlat (ph ! fst'))
+    wheres $ cons ! Cons.tableName' .=. toFlat (ph ! snd')
 
     asc $ consCols ! ConsCols.position'
 
@@ -110,4 +110,4 @@ primaryKeyRelation = relationWithPlaceholder $ \ph -> do
 
 -- | Phantom typed 'Query' to get primary key name from owner name and table name.
 primaryKeyQuerySQL :: Query (String, String) (Maybe String)
-primaryKeyQuerySQL = relationalQuery primaryKeyRelation
+primaryKeyQuerySQL = relationalQuery defaultPlaceholders primaryKeyRelation

@@ -88,8 +88,8 @@ instance MonadQualify q m => MonadQualify q (AggregatingSetT m) where
 instance MonadQuery m => MonadQuery (AggregatingSetT m) where
   setDuplication     = aggregatings . setDuplication
   restrictJoin       = aggregatings . restrictJoin
-  query'             = aggregatings . query'
-  queryMaybe'        = aggregatings . queryMaybe'
+  query' ph          = aggregatings . query' ph
+  queryMaybe' ph     = aggregatings . queryMaybe' ph
 
 unsafeAggregateWithTerm :: Monad m => WithPlaceholderOffsets at -> Aggregatings ac at m ()
 unsafeAggregateWithTerm =  Aggregatings . tell . fmap singleton

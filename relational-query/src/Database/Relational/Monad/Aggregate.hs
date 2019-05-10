@@ -40,7 +40,7 @@ import Database.Relational.SqlSyntax
 import qualified Database.Relational.SqlSyntax as Syntax
 
 import qualified Database.Relational.Record as Record
-import Database.Relational.Projectable (PlaceHolders, SqlContext)
+import Database.Relational.Projectable (SqlContext)
 import Database.Relational.Monad.Class (MonadRestrict(..))
 import Database.Relational.Monad.Trans.Restricting
   (Restrictings, restrictings, extractRestrict)
@@ -55,8 +55,8 @@ import Database.Relational.Monad.Type (QueryCore, extractCore, OrderedQuery)
 -- | Aggregated query monad type.
 type QueryAggregate     = Orderings Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore))
 
--- | Aggregated query type. 'AggregatedQuery' p r == 'QueryAggregate' ('PlaceHolders' p, 'Record' 'Aggregated' r).
-type AggregatedQuery p r = OrderedQuery Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore)) p r
+-- | Aggregated query type. 'AggregatedQuery' p r == 'QueryAggregate' ('Record' 'Aggregated' r).
+type AggregatedQuery r  = OrderedQuery Aggregated (Restrictings Aggregated (AggregatingSetT QueryCore)) r
 
 -- | Partition monad type for partition-by clause.
 type Window           c = Orderings c (PartitioningSet c)
@@ -65,8 +65,8 @@ type Window           c = Orderings c (PartitioningSet c)
 instance MonadRestrict Flat q => MonadRestrict Flat (Restrictings Aggregated q) where
   restrict = restrictings . restrict
 
-extract :: AggregatedQuery p r
-        -> ConfigureQuery (((((((PlaceHolders p, Record Aggregated r),
+extract :: AggregatedQuery r
+        -> ConfigureQuery (((((((Record Aggregated r),
                                  WithPlaceholderOffsets [OrderingTerm]),
                                [WithPlaceholderOffsets Syntax.Tuple]),
                               WithPlaceholderOffsets [AggregateElem]),
@@ -75,15 +75,15 @@ extract :: AggregatedQuery p r
 extract =  extractCore . extractAggregateTerms . extractRestrict . extractOrderingTerms
 
 -- | Run 'AggregatedQuery' to get SQL with 'ConfigureQuery' computation.
-toSQL :: AggregatedQuery p r   -- ^ 'AggregatedQuery' to run
+toSQL :: AggregatedQuery r     -- ^ 'AggregatedQuery' to run
       -> ConfigureQuery String -- ^ Result SQL string with 'ConfigureQuery' computation
 toSQL =  fmap Syntax.toSQL . toSubQuery
 
 -- | Run 'AggregatedQuery' to get 'SubQuery' with 'ConfigureQuery' computation.
-toSubQuery :: AggregatedQuery p r       -- ^ 'AggregatedQuery' to run
+toSubQuery :: AggregatedQuery r       -- ^ 'AggregatedQuery' to run
            -> ConfigureQuery SubQuery -- ^ Result 'SubQuery' with 'ConfigureQuery' computation
 toSubQuery q = do
-  (((((((_ph, pj), ot), grs), ag), rs), pd), da) <- extract q
+  ((((((pj, ot), grs), ag), rs), pd), da) <- extract q
   c <- askConfig
   return $ aggregatedSubQuery c (Syntax.untypeRecordWithPlaceholderOffsets pj) da pd rs ag grs ot
 

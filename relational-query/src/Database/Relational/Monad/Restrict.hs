@@ -26,6 +26,7 @@ import Database.Relational.SqlSyntax (Tuple, Record, WithPlaceholderOffsets)
 
 import Database.Relational.Monad.Trans.Restricting
   (Restrictings, extractRestrict)
+import Database.Relational.Monad.Trans.ReadPlaceholders (ReadPlaceholders,)
 import Database.Relational.Monad.BaseType (ConfigureQuery, configureQuery)
 
 
@@ -35,7 +36,7 @@ type Restrict = Restrictings Flat ConfigureQuery
 -- | RestrictedStatement type synonym.
 --   Record type 'r' must be
 --   the same as 'Restrictings' type parameter 'r'.
-type RestrictedStatement r a = Record Flat r -> Restrict a
+type RestrictedStatement p r a = Record Flat r -> ReadPlaceholders p Restrict a
 
 -- -- | 'return' of 'Restrict'
 -- restricted :: a -> Restrict a

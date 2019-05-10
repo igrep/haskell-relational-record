@@ -60,8 +60,8 @@ instance MonadQualify q m => MonadQualify q (Orderings c m) where
 instance MonadQuery m => MonadQuery (Orderings c m) where
   setDuplication     = orderings . setDuplication
   restrictJoin       = orderings . restrictJoin
-  query'             = orderings . query'
-  queryMaybe'        = orderings . queryMaybe'
+  query' ph          = orderings . query' ph
+  queryMaybe' ph     = orderings . queryMaybe' ph
 
 -- | 'MonadAggregate' with ordering.
 instance MonadAggregate m => MonadAggregate (Orderings c m) where

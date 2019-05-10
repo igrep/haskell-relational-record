@@ -34,34 +34,33 @@ import Database.Relational.Monad.Trans.Ordering
   (Orderings, orderings, extractOrderingTerms)
 import Database.Relational.Monad.BaseType (ConfigureQuery, askConfig)
 import Database.Relational.Monad.Type (QueryCore, extractCore, OrderedQuery)
-import Database.Relational.Projectable (PlaceHolders)
 
 
 -- | Simple (not-aggregated) query monad type.
 type QuerySimple = Orderings Flat QueryCore
 
--- | Simple (not-aggregated) query type. 'SimpleQuery'' p r == 'QuerySimple' ('PlaceHolders' p, 'Record' Flat r).
-type SimpleQuery p r = OrderedQuery Flat QueryCore p r
+-- | Simple (not-aggregated) query type. 'SimpleQuery'' r == 'QuerySimple' ('Record' Flat r).
+type SimpleQuery r = OrderedQuery Flat QueryCore r
 
 -- | Lift from qualified table forms into 'QuerySimple'.
 simple :: ConfigureQuery a -> QuerySimple a
 simple =  orderings . restrictings . join'
 
-extract :: SimpleQuery p r
-        -> ConfigureQuery (((((PlaceHolders p, Record Flat r),
+extract :: SimpleQuery r
+        -> ConfigureQuery (((((Record Flat r),
                            Syntax.WithPlaceholderOffsets [OrderingTerm]), [Syntax.WithPlaceholderOffsets Tuple]),
                            Syntax.WithPlaceholderOffsets JoinProduct), Duplication)
 extract =  extractCore . extractOrderingTerms
 
 -- | Run 'SimpleQuery' to get SQL string with 'Qualify' computation.
-toSQL :: SimpleQuery p r         -- ^ 'SimpleQuery' to run
+toSQL :: SimpleQuery r         -- ^ 'SimpleQuery' to run
       -> ConfigureQuery String -- ^ Result SQL string with 'Qualify' computation
 toSQL =  fmap Syntax.toSQL . toSubQuery
 
 -- | Run 'SimpleQuery' to get 'SubQuery' with 'Qualify' computation.
-toSubQuery :: SimpleQuery p r        -- ^ 'SimpleQuery'' to run
+toSubQuery :: SimpleQuery r           -- ^ 'SimpleQuery'' to run
            -> ConfigureQuery SubQuery -- ^ Result 'SubQuery' with 'Qualify' computation
 toSubQuery q = do
-   (((((_ph, pj), ot), rs), pd), da) <- extract q
+   ((((pj, ot), rs), pd), da) <- extract q
    c <- askConfig
    return $ flatSubQuery c (Syntax.untypeRecordWithPlaceholderOffsets pj) da pd rs ot

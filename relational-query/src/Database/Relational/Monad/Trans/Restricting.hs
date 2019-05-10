@@ -62,8 +62,8 @@ instance MonadQualify q m => MonadQualify q (Restrictings c m) where
 instance MonadQuery q => MonadQuery (Restrictings c q) where
   setDuplication     = restrictings . setDuplication
   restrictJoin       = restrictings . restrictJoin
-  query'             = restrictings . query'
-  queryMaybe'        = restrictings . queryMaybe'
+  query' ph          = restrictings . query' ph
+  queryMaybe' ph     = restrictings . queryMaybe' ph
 
 -- | Resticted 'MonadAggregate' instance.
 instance MonadAggregate m => MonadAggregate (Restrictings c m) where

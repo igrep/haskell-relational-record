@@ -27,8 +27,8 @@ import Data.Time (LocalTime, Day)
 import Language.Haskell.TH (TypeQ)
 
 import Database.Relational
-  (Query, relationalQuery, Relation, query, relationWithPlaceholder,
-   wheres, (.=.), (!), (><), placeholder, asc, value, fst', snd')
+  (Query, relationalQuery, Relation, query, relation', defaultPlaceholders,
+   wheres, (.=.), (!), (><), asc, value, fst', snd', toFlat)
 
 import Control.Applicative ((<|>))
 
@@ -78,21 +78,21 @@ getType mapFromSql rec = do
 
 -- | 'Relation' to query 'Columns' from schema name and table name.
 columnsRelationFromTable :: Relation (String, String) Columns
-columnsRelationFromTable =  relationWithPlaceholder $ \ph -> do
+columnsRelationFromTable =  relation' $ \ph -> do
   c <- query columns
-  wheres $ c ! Columns.tabschema' .=. ph ! fst'
-  wheres $ c ! Columns.tabname'   .=. ph ! snd'
+  wheres $ c ! Columns.tabschema' .=. toFlat (ph ! fst')
+  wheres $ c ! Columns.tabname'   .=. toFlat (ph ! snd')
   asc $ c ! Columns.colno'
   return c
 
 -- | Phantom typed 'Query' to get 'Columns' from schema name and table name.
 columnsQuerySQL :: Query (String, String) Columns
-columnsQuerySQL =  relationalQuery columnsRelationFromTable
+columnsQuerySQL =  relationalQuery defaultPlaceholders columnsRelationFromTable
 
 
 -- | 'Relation' to query primary key name from schema name and table name.
 primaryKeyRelation :: Relation (String, String) String
-primaryKeyRelation =  relationWithPlaceholder $ \ph -> do
+primaryKeyRelation =  relation' $ \ph -> do
   cons  <- query tabconst
   key   <- query keycoluse
   col   <- query columns
@@ -102,12 +102,12 @@ primaryKeyRelation =  relationWithPlaceholder $ \ph -> do
   wheres $ key  ! Keycoluse.colname'  .=. col ! Columns.colname'
   wheres $ cons ! Tabconst.constname' .=. key ! Keycoluse.constname'
 
-  wheres $ col  ! Columns.nulls'     .=. value "N"
-  wheres $ cons ! Tabconst.type'     .=. value "P"
-  wheres $ cons ! Tabconst.enforced' .=. value "Y"
+  wheres $ col  ! Columns.nulls'     .=. toFlat (value "N")
+  wheres $ cons ! Tabconst.type'     .=. toFlat (value "P")
+  wheres $ cons ! Tabconst.enforced' .=. toFlat (value "Y")
 
-  wheres $ cons ! Tabconst.tabschema' .=. ph  ! fst'
-  wheres $ cons ! Tabconst.tabname'   .=. ph  ! snd'
+  wheres $ cons ! Tabconst.tabschema' .=. toFlat (ph ! fst')
+  wheres $ cons ! Tabconst.tabname'   .=. toFlat (ph ! snd')
 
   asc  $ key ! Keycoluse.colseq'
 
@@ -115,4 +115,4 @@ primaryKeyRelation =  relationWithPlaceholder $ \ph -> do
 
 -- | Phantom typed 'Query' to get primary key name from schema name and table name.
 primaryKeyQuerySQL :: Query (String, String) String
-primaryKeyQuerySQL =  relationalQuery primaryKeyRelation
+primaryKeyQuerySQL =  relationalQuery defaultPlaceholders primaryKeyRelation

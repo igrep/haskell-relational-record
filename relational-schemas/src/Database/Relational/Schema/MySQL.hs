@@ -21,16 +21,17 @@ import           Language.Haskell.TH    (TypeQ)
 import Database.Relational              ( Query
                                         , relationalQuery
                                         , query
-                                        , relationWithPlaceholder
+                                        , relation'
                                         , wheres
                                         , (.=.)
                                         , (!)
                                         , (><)
-                                        , placeholder
                                         , asc
                                         , value
                                         , fst'
                                         , snd'
+                                        , toFlat
+                                        , defaultPlaceholders
                                         )
 
 import           Database.Relational.Schema.MySQLInfo.Columns           (Columns, columns)
@@ -87,19 +88,19 @@ getType mapFromSql rec = do
                       else [t|Maybe $(typ)|]
 
 columnsQuerySQL :: Query (String, String) Columns
-columnsQuerySQL = relationalQuery columnsRelationFromTable
+columnsQuerySQL = relationalQuery defaultPlaceholders columnsRelationFromTable
     where
-        columnsRelationFromTable = relationWithPlaceholder $ \ph -> do
+        columnsRelationFromTable = relation' $ \ph -> do
             c <- query columns
-            wheres $ c ! Columns.tableSchema' .=. ph ! fst'
-            wheres $ c ! Columns.tableName'   .=. ph ! snd'
+            wheres $ c ! Columns.tableSchema' .=. toFlat (ph ! fst')
+            wheres $ c ! Columns.tableName'   .=. toFlat (ph ! snd')
             asc $ c ! Columns.ordinalPosition'
             return c
 
 primaryKeyQuerySQL :: Query (String, String) String
-primaryKeyQuerySQL = relationalQuery primaryKeyRelation
+primaryKeyQuerySQL = relationalQuery defaultPlaceholders primaryKeyRelation
     where
-        primaryKeyRelation = relationWithPlaceholder $ \ph -> do
+        primaryKeyRelation = relation' $ \ph -> do
             cons <- query tableConstraints
             key  <- query keyColumnUsage
 
@@ -107,9 +108,9 @@ primaryKeyQuerySQL = relationalQuery primaryKeyRelation
             wheres $ cons ! Tabconst.tableName'      .=. key ! Keycoluse.tableName'
             wheres $ cons ! Tabconst.constraintName' .=. key ! Keycoluse.constraintName'
 
-            wheres $ cons ! Tabconst.tableSchema' .=. ph ! fst'
-            wheres $ cons ! Tabconst.tableName'   .=. ph ! snd'
-            wheres $ cons ! Tabconst.constraintType' .=. value "PRIMARY KEY"
+            wheres $ cons ! Tabconst.tableSchema' .=. toFlat (ph ! fst')
+            wheres $ cons ! Tabconst.tableName'   .=. toFlat (ph ! snd')
+            wheres $ cons ! Tabconst.constraintType' .=. toFlat (value "PRIMARY KEY")
 
             asc $ key ! Keycoluse.ordinalPosition'
 

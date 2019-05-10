@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 -- |
 -- Module      : Database.Relational.Projectable.Unsafe
 -- Copyright   : 2017 Kei Hibino
@@ -10,7 +12,7 @@
 -- This module provides unsafe interfaces between projected terms and SQL terms.
 module Database.Relational.Projectable.Unsafe (
   SqlContext (..), OperatorContext, AggregatedContext,
-  PlaceHolders (..),
+  ResultContext,
   unsafeProjectSqlTerms,
   ) where
 
@@ -31,9 +33,7 @@ class SqlContext c => OperatorContext c
 -- | Constraint to restrict context of aggregated SQL context.
 class AggregatedContext ac
 
-
--- | Placeholder parameter type which has real parameter type arguemnt 'p'.
-data PlaceHolders p = PlaceHolders
+type family ResultContext c1 c2
 
 unsafeProjectSqlTerms :: SqlContext c => [StringSQL] -> Record c t
 unsafeProjectSqlTerms = unsafeProjectSqlTermsWithPlaceholders . attachEmptyPlaceholderOffsets

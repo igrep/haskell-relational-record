@@ -17,10 +17,10 @@ import Data.Char (toLower)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Map (Map)
 import Data.Time (LocalTime, Day, TimeOfDay)
-import Database.Relational (Query, Relation, PlaceHolders, Record, Flat,
-                            (!), (.=.), (><), asc, relationalQuery, just, placeholder',
+import Database.Relational (Query, Relation, Record, Flat, PureOperand,
+                            fst', snd', (!), (.=.), (><), asc, relationalQuery, just,
                             query, relation', unsafeShowSql,
-                            unsafeProjectSql, wheres)
+                            unsafeProjectSql, wheres, toFlat, defaultPlaceholders)
 import Database.Relational.Schema.SQLServerSyscat.Columns
 import Database.Relational.Schema.SQLServerSyscat.Indexes
 import Database.Relational.Schema.SQLServerSyscat.IndexColumns
@@ -78,37 +78,28 @@ getType mapFromSql rec@((cols,typs),typScms) = do
 sqlsrvTrue :: Record Flat Bool
 sqlsrvTrue =  unsafeProjectSql "1"
 
-sqlsrvObjectId :: Record Flat String -> Record Flat String -> Record Flat Int32
+sqlsrvObjectId :: Record PureOperand String -> Record PureOperand String -> Record PureOperand Int32
 sqlsrvObjectId s t = unsafeProjectSql $
     "OBJECT_ID(" ++ unsafeShowSql s ++ " + '.' + " ++ unsafeShowSql t ++ ")"
 
-sqlsrvOidPlaceHolder :: (PlaceHolders (String, String), Record Flat Int32)
-sqlsrvOidPlaceHolder =  (nsParam >< relParam, oid)
-  where
-    (nsParam, (relParam, oid)) =
-      placeholder' (\nsPh ->
-                     placeholder' (\relPh ->
-                                    sqlsrvObjectId nsPh relPh))
-
 columnTypeRelation :: Relation (String,String) ((Columns,Types),String)
-columnTypeRelation = relation' $ do
+columnTypeRelation = relation' $ \ph -> do
     cols <- query columns
     typs <- query types
 
     wheres $ cols ! Columns.userTypeId' .=. typs ! Types.userTypeId'
-    wheres $ cols ! Columns.objectId'   .=. oid
+    wheres $ cols ! Columns.objectId'   .=. toFlat (sqlsrvObjectId (ph ! fst') (ph ! snd'))
     asc $ cols ! Columns.columnId'
-    return   (params, cols >< typs >< sqlsrvSchemaName (typs ! Types.schemaId' :: Record Flat Int32))
+    return   (cols >< typs >< sqlsrvSchemaName (typs ! Types.schemaId' :: Record Flat Int32))
   where
-    (params, oid) = sqlsrvOidPlaceHolder
     sqlsrvSchemaName i = unsafeProjectSql $
         "SCHEMA_NAME(" ++ unsafeShowSql i ++ ")"
 
 columnTypeQuerySQL :: Query (String, String) ((Columns, Types), String)
-columnTypeQuerySQL =  relationalQuery columnTypeRelation
+columnTypeQuerySQL =  relationalQuery defaultPlaceholders columnTypeRelation
 
 primaryKeyRelation :: Relation (String,String) (Maybe String)
-primaryKeyRelation = relation' $ do
+primaryKeyRelation = relation' $ \ph -> do
     idxes  <- query indexes
     idxcol <- query indexColumns
     cols   <- query columns
@@ -117,10 +108,9 @@ primaryKeyRelation = relation' $ do
     wheres $ idxcol ! IndexColumns.objectId' .=. cols   ! Columns.objectId'
     wheres $ idxcol ! IndexColumns.columnId' .=. cols   ! Columns.columnId'
     wheres $ idxes  ! Indexes.isPrimaryKey'  .=. just sqlsrvTrue
-    let (params, oid) = sqlsrvOidPlaceHolder
-    wheres $ idxes  ! Indexes.objectId'      .=. oid
+    wheres $ idxes  ! Indexes.objectId'      .=. toFlat (sqlsrvObjectId (ph ! fst') (ph ! snd'))
     asc    $ idxcol ! IndexColumns.keyOrdinal'
-    return   (params, cols   ! Columns.name')
+    return   (cols  ! Columns.name')
 
 primaryKeyQuerySQL :: Query (String,String) (Maybe String)
-primaryKeyQuerySQL =  relationalQuery primaryKeyRelation
+primaryKeyQuerySQL =  relationalQuery defaultPlaceholders primaryKeyRelation
