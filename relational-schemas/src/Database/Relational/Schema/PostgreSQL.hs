@@ -37,7 +37,7 @@ import Data.Time
 import Database.Relational
   (Query, relationalQuery, Relation, query, query', relation', relation, union,
    wheres, (.=.), (.>.), in', values, (!), fst', snd',
-   asc, value, unsafeProjectSql, (><), toFlat, defaultPlaceholders)
+   asc, value, unsafeProjectSql, (><), toFlat,)
 
 import Database.Relational.Pure.NonStandard.TIMESTAMPTZ ()
 
@@ -161,7 +161,7 @@ columnRelation = relation' $ \ph -> do
 
 -- | Phantom typed 'Query' to get 'Column' from schema name and table name.
 columnQuerySQL :: Query (String, String) Column
-columnQuerySQL =  relationalQuery defaultPlaceholders columnRelation
+columnQuerySQL =  relationalQuery columnRelation
 
 -- | 'Relation' to query primary key length from schema name and table name.
 primaryKeyLengthRelation :: Relation (String, String) Int32
@@ -176,7 +176,7 @@ primaryKeyLengthRelation =  relation' $ \ph -> do
 
 -- | Phantom typed 'Query' to get primary key length from schema name and table name.
 primaryKeyLengthQuerySQL :: Query (String, String) Int32
-primaryKeyLengthQuerySQL =  relationalQuery defaultPlaceholders primaryKeyLengthRelation
+primaryKeyLengthQuerySQL =  relationalQuery primaryKeyLengthRelation
 
 -- | One column which is nth column of composite primary key.
 constraintColRelation :: Int32 -> Relation () (PgConstraint, (Int16, Int32))
@@ -211,4 +211,4 @@ primaryKeyRelation n = relation' $ \ph -> do
 
 -- | Phantom typed 'Query' to get primary key name from schema name and table name.
 primaryKeyQuerySQL :: Int32 -> Query (String, String) String
-primaryKeyQuerySQL =  relationalQuery defaultPlaceholders . primaryKeyRelation
+primaryKeyQuerySQL =  relationalQuery . primaryKeyRelation

@@ -84,7 +84,7 @@ columnsRelationFromTable = relation' $ \ph -> do
 
 -- | Phantom typed 'Query' to get 'DbaTabColumns' from owner name and table name.
 columnsQuerySQL :: Query (String, String) DbaTabColumns
-columnsQuerySQL = relationalQuery defaultPlaceholders columnsRelationFromTable
+columnsQuerySQL = relationalQuery columnsRelationFromTable
 
 -- | 'Relation' to query primary key name from owner name and table name.
 primaryKeyRelation :: Relation (String, String) (Maybe String)
@@ -110,4 +110,4 @@ primaryKeyRelation = relation' $ \ph -> do
 
 -- | Phantom typed 'Query' to get primary key name from owner name and table name.
 primaryKeyQuerySQL :: Query (String, String) (Maybe String)
-primaryKeyQuerySQL = relationalQuery defaultPlaceholders primaryKeyRelation
+primaryKeyQuerySQL = relationalQuery primaryKeyRelation

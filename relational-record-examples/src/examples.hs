@@ -850,7 +850,7 @@ insertBranch_s1 = insertValueNoPH $ do
 -- @
 --
 insertBranch_s1P :: Insert Branch1
-insertBranch_s1P = insert defaultPlaceholders piBranch1
+insertBranch_s1P = insert piBranch1
 
 piBranch1 :: Pi Branch Branch1
 piBranch1 = Branch1 |$| #name
@@ -911,7 +911,7 @@ insertBranch_s1R = insertValueNoPH $ do
 -- Above SQL is the same to ad-hoc defined record version.
 --
 insertBranch_s1PT :: Insert (String, Maybe String, Maybe String, Maybe String, Maybe String)
-insertBranch_s1PT = insert defaultPlaceholders piBranchTuple
+insertBranch_s1PT = insert piBranchTuple
 
 piBranchTuple :: Pi Branch (String, Maybe String, Maybe String, Maybe String, Maybe String)
 piBranchTuple = (,,,,)
@@ -958,7 +958,7 @@ branchTuple = ("Headquarters",
 -- The name column of branch table is the same.
 --
 insertEmployee_s2 :: InsertQuery ()
-insertEmployee_s2 = insertQuery pempty piEmployee3 . relation $ do
+insertEmployee_s2 = insertQuery piEmployee3 . relation $ do
   d <- query department
   b <- query branch
   wheres $ #name d .=. toFlat (value "Administration")
@@ -1007,7 +1007,7 @@ $(makeRelationalRecord ''Employee3)
 -- @
 --
 insertEmployee_s2U :: InsertQuery ()
-insertEmployee_s2U = insertQuery pempty piEmployee3 . relation $ do
+insertEmployee_s2U = insertQuery piEmployee3 . relation $ do
   d <- queryScalar . unsafeUnique . relation $ do
     d' <- query department
     wheres $ #name d' .=. toFlat (value "Administration")
@@ -1046,7 +1046,7 @@ $(makeRelationalRecord ''Employee4)
 -- @
 --
 insertEmployee_s2P :: InsertQuery Employee4
-insertEmployee_s2P = insertQuery defaultPlaceholders piEmployee3 . relation' $ \ph -> do
+insertEmployee_s2P = insertQuery piEmployee3 . relation' $ \ph -> do
   d <- query department
   b <- query branch
   wheres $ #name d .=. toFlat (value "Administration")
@@ -1110,7 +1110,7 @@ updateEmployee_o3 = updateNoPH $ \proj -> do
 -- @
 --
 updateEmployee_o3P :: Update (String, Int, Int)
-updateEmployee_o3P = update defaultPlaceholders $ \proj -> do
+updateEmployee_o3P = update $ \proj -> do
   ph <- askPlaceholders
   #lname <-# toFlat (ph ! tuplePi3_0')
   #deptId <-# toFlat (just (ph ! tuplePi3_1'))
@@ -1196,7 +1196,7 @@ deleteAccount_o1 = deleteNoPH $ \proj ->
 -- @
 --
 deleteAccount_o1P :: Delete Int
-deleteAccount_o1P = delete defaultPlaceholders $ \proj -> do
+deleteAccount_o1P = delete $ \proj -> do
   ph <- askPlaceholders
   wheres $ proj ! Account.accountId' .=. toFlat ph
 
@@ -1232,7 +1232,7 @@ deleteAccount_o2 = deleteNoPH $ \proj' -> do
 -- @
 --
 deleteAccount_o2P :: Delete (Int, Int)
-deleteAccount_o2P = delete defaultPlaceholders $ \proj' -> do
+deleteAccount_o2P = delete $ \proj' -> do
   ph <- askPlaceholders
   let proj = proj' :: Record Flat Account
   wheres $ #accountId proj .>=. toFlat (ph ! fst')

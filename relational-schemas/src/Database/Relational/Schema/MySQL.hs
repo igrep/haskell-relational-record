@@ -25,13 +25,11 @@ import Database.Relational              ( Query
                                         , wheres
                                         , (.=.)
                                         , (!)
-                                        , (><)
                                         , asc
                                         , value
                                         , fst'
                                         , snd'
                                         , toFlat
-                                        , defaultPlaceholders
                                         )
 
 import           Database.Relational.Schema.MySQLInfo.Columns           (Columns, columns)
@@ -88,7 +86,7 @@ getType mapFromSql rec = do
                       else [t|Maybe $(typ)|]
 
 columnsQuerySQL :: Query (String, String) Columns
-columnsQuerySQL = relationalQuery defaultPlaceholders columnsRelationFromTable
+columnsQuerySQL = relationalQuery columnsRelationFromTable
     where
         columnsRelationFromTable = relation' $ \ph -> do
             c <- query columns
@@ -98,7 +96,7 @@ columnsQuerySQL = relationalQuery defaultPlaceholders columnsRelationFromTable
             return c
 
 primaryKeyQuerySQL :: Query (String, String) String
-primaryKeyQuerySQL = relationalQuery defaultPlaceholders primaryKeyRelation
+primaryKeyQuerySQL = relationalQuery primaryKeyRelation
     where
         primaryKeyRelation = relation' $ \ph -> do
             cons <- query tableConstraints

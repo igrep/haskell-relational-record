@@ -43,7 +43,7 @@ import Database.Relational.Constraint
   (HasConstraintKey (..), Key, Primary, projectionKey)
 import Database.Relational.Projectable ((.<=.), value, (!))
 import Database.Relational.ProjectableClass (LiteralSQL)
-import Database.Relational.Record (toFlat, pempty)
+import Database.Relational.Record (toFlat)
 import Database.Relational.Relation (tableOf)
 import qualified Database.Relational.Relation as Relation
 import Database.Relational.Effect (updateTarget')
@@ -142,7 +142,7 @@ updateNumber' :: (PersistableWidth s, Integral i, LiteralSQL i)
               -> i            -- ^ sequence number to set. expect not SQL injectable.
               -> Sequence s i -- ^ sequence table
               -> Update ()
-updateNumber' config i seqt = typedUpdate' config pempty (seqTable seqt) . updateTarget' $ \proj -> readPlaceholders $ do
+updateNumber' config i seqt = typedUpdate' config (seqTable seqt) . updateTarget' $ \proj -> readPlaceholders $ do
   let iv = value i
   seqKey seqt <-# iv
   wheres $ proj ! seqKey seqt .<=. (toFlat iv) -- fool proof

@@ -422,13 +422,13 @@ assign t = queryA (`Monadic.assignTo` t)
 
 -- | Same as 'Monadic.update''.
 --   Make 'Update' from assigning statement arrow using configuration.
-update' :: TableDerivable r => Config -> Record PureOperand p -> AssignStatement p r () -> Update p
-update' config phs = Monadic.update' config phs . runQueryA
+update' :: (PersistableWidth p, TableDerivable r) => Config -> AssignStatement p r () -> Update p
+update' config = Monadic.update' config . runQueryA
 
 -- | Same as 'Monadic.update'.
 --   Make 'Update' from assigning statement arrow.
-update :: TableDerivable r => Record PureOperand p -> AssignStatement p r () -> Update p
-update phs = Monadic.update phs . runQueryA
+update :: (PersistableWidth p, TableDerivable r) => AssignStatement p r () -> Update p
+update = Monadic.update . runQueryA
 
 -- | Same as 'Monadic.updateNoPH'.
 --   Make 'Update' from assigning statement arrow.
@@ -439,18 +439,16 @@ updateNoPH = Monadic.updateNoPH . runQueryA
 --   Make 'Update' from restrected statement arrow.
 updateAllColumn' :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
                  => Config
-                 -> Record PureOperand (r, p)
                  -> RestrictedStatement p r ()
                  -> Update (r, p)
-updateAllColumn' config phs = Monadic.updateAllColumn' config phs . runQueryA
+updateAllColumn' config = Monadic.updateAllColumn' config . runQueryA
 
 -- | Same as 'Monadic.updateAllColumn'.
 --   Make 'Update' from restrected statement arrow.
 updateAllColumn :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
-                => Record PureOperand (r, p)
-                -> RestrictedStatement p r ()
+                => RestrictedStatement p r ()
                 -> Update (r, p)
-updateAllColumn phs = Monadic.updateAllColumn phs . runQueryA
+updateAllColumn = Monadic.updateAllColumn . runQueryA
 
 -- | Same as 'Monadic.updateAllColumnNoPH'.
 --   Make 'Update' from restrected statement arrow.
@@ -461,13 +459,13 @@ updateAllColumnNoPH = Monadic.updateAllColumnNoPH . runQueryA
 
 -- | Same as 'Monadic.insertValue''.
 --   Make 'Insert' from register arrow using configuration.
-insertValue' :: TableDerivable r => Config -> Record PureOperand p -> Register p r () -> Insert p
-insertValue' config phs = Monadic.insertValue' config phs . ($ ()) . runQueryA
+insertValue' :: (PersistableWidth p, TableDerivable r) => Config -> Register p r () -> Insert p
+insertValue' config = Monadic.insertValue' config . ($ ()) . runQueryA
 
 -- | Same as 'Monadic.insertValue'.
 --   Make 'Insert' from register arrow.
-insertValue :: TableDerivable r => Record PureOperand p -> Register p r () -> Insert p
-insertValue phs = Monadic.insertValue phs . ($ ()) . runQueryA
+insertValue :: (PersistableWidth p, TableDerivable r) => Register p r () -> Insert p
+insertValue = Monadic.insertValue . ($ ()) . runQueryA
 
 -- | Same as 'Monadic.insertValueNoPH'.
 --   Make 'Insert' from register arrow.
@@ -477,13 +475,13 @@ insertValueNoPH = Monadic.insertValueNoPH . ($ ()) . runQueryA
 
 -- | Same as 'Monadic.delete''.
 --   Make 'Update' from restrict statement arrow using configuration.
-delete' :: TableDerivable r => Config -> Record PureOperand p -> RestrictedStatement p r () -> Delete p
-delete' config phs = Monadic.delete' config phs . runQueryA
+delete' :: (PersistableWidth p, TableDerivable r) => Config -> RestrictedStatement p r () -> Delete p
+delete' config = Monadic.delete' config . runQueryA
 
 -- | Same as 'Monadic.delete'.
 --   Make 'Update' from restrict statement arrow.
-delete :: TableDerivable r => Record PureOperand p -> RestrictedStatement p r () -> Delete p
-delete phs = Monadic.delete phs . runQueryA
+delete :: (PersistableWidth p, TableDerivable r) => RestrictedStatement p r () -> Delete p
+delete = Monadic.delete . runQueryA
 
 -- | Same as 'Monadic.deleteNoPH'.
 --   Make 'Update' from restrict statement arrow.
@@ -493,30 +491,30 @@ deleteNoPH = Monadic.deleteNoPH . runQueryA
 {-# DEPRECATED derivedUpdate' "use `update'` instead of this." #-}
 -- | Same as 'Monadic.update''.
 --   Make 'Update' from assigning statement arrow using configuration.
-derivedUpdate' :: TableDerivable r => Config -> Record PureOperand p -> AssignStatement p r () -> Update p
+derivedUpdate' :: (PersistableWidth p, TableDerivable r) => Config -> AssignStatement p r () -> Update p
 derivedUpdate' = update'
 
 {-# DEPRECATED derivedUpdate "use `update` instead of this." #-}
 -- | Deprecated.
-derivedUpdate :: TableDerivable r => Record PureOperand p -> AssignStatement p r () -> Update p
+derivedUpdate :: (PersistableWidth p, TableDerivable r) => AssignStatement p r () -> Update p
 derivedUpdate = update
 
 {-# DEPRECATED derivedInsertValue' "use `insertValue'` instead of this." #-}
 -- | Deprecated.
-derivedInsertValue' :: TableDerivable r => Config -> Record PureOperand p -> Register p r () -> Insert p
+derivedInsertValue' :: (PersistableWidth p, TableDerivable r) => Config -> Register p r () -> Insert p
 derivedInsertValue' = insertValue'
 
 {-# DEPRECATED derivedInsertValue "use `insertValue` instead of this." #-}
 -- | Deprecated.
-derivedInsertValue :: TableDerivable r => Record PureOperand p -> Register p r () -> Insert p
+derivedInsertValue :: (PersistableWidth p, TableDerivable r) => Register p r () -> Insert p
 derivedInsertValue = insertValue
 
 {-# DEPRECATED derivedDelete' "use `derivedDelete'` instead of this." #-}
 -- | Deprecated.
-derivedDelete' :: TableDerivable r => Config -> Record PureOperand p -> RestrictedStatement p r () -> Delete p
+derivedDelete' :: (PersistableWidth p, TableDerivable r) => Config -> RestrictedStatement p r () -> Delete p
 derivedDelete' = delete'
 
 {-# DEPRECATED derivedDelete "use `derivedDelete` instead of this." #-}
 -- | Deprecated.
-derivedDelete :: TableDerivable r => Record PureOperand p -> RestrictedStatement p r () -> Delete p
+derivedDelete :: (PersistableWidth p, TableDerivable r) => RestrictedStatement p r () -> Delete p
 derivedDelete = delete

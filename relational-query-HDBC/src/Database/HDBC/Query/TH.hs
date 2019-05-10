@@ -43,7 +43,7 @@ import Database.Record (ToSql, FromSql, PersistableWidth)
 import Database.Record.TH (recordTemplate, defineSqlPersistableInstances)
 import Database.Relational
   (Config, nameConfig, recordConfig, enableWarning, verboseAsCompilerWarning,
-   defaultConfig, Relation, relationalQuerySQL, QuerySuffix, defaultPlaceholders)
+   defaultConfig, Relation, relationalQuerySQL, QuerySuffix,)
 import qualified Database.Relational.TH as Relational
 
 import Database.HDBC.Session (withConnectionIO)
@@ -181,7 +181,7 @@ inlineVerifiedQuery :: (IConnection conn, PersistableWidth p)
                     -> Q [Dec]      -- ^ Result declarations
 inlineVerifiedQuery connect relVar rel config sufs qns = do
   (p, r) <- Relational.reifyRelation relVar
-  let sql = show $ relationalQuerySQL config defaultPlaceholders rel sufs
+  let sql = show $ relationalQuerySQL config rel sufs
   when (verboseAsCompilerWarning config) . reportWarning $ "Verify with prepare: " ++ sql
   void . runIO $ withConnectionIO connect (\conn -> prepare conn sql)
   Relational.unsafeInlineQuery (return p) (return r) sql (varCamelcaseName qns)

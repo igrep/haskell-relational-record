@@ -27,8 +27,8 @@ import Data.Time (LocalTime, Day)
 import Language.Haskell.TH (TypeQ)
 
 import Database.Relational
-  (Query, relationalQuery, Relation, query, relation', defaultPlaceholders,
-   wheres, (.=.), (!), (><), asc, value, fst', snd', toFlat)
+  (Query, relationalQuery, Relation, query, relation',
+   wheres, (.=.), (!), asc, value, fst', snd', toFlat)
 
 import Control.Applicative ((<|>))
 
@@ -87,7 +87,7 @@ columnsRelationFromTable =  relation' $ \ph -> do
 
 -- | Phantom typed 'Query' to get 'Columns' from schema name and table name.
 columnsQuerySQL :: Query (String, String) Columns
-columnsQuerySQL =  relationalQuery defaultPlaceholders columnsRelationFromTable
+columnsQuerySQL =  relationalQuery columnsRelationFromTable
 
 
 -- | 'Relation' to query primary key name from schema name and table name.
@@ -115,4 +115,4 @@ primaryKeyRelation =  relation' $ \ph -> do
 
 -- | Phantom typed 'Query' to get primary key name from schema name and table name.
 primaryKeyQuerySQL :: Query (String, String) String
-primaryKeyQuerySQL =  relationalQuery defaultPlaceholders primaryKeyRelation
+primaryKeyQuerySQL =  relationalQuery primaryKeyRelation

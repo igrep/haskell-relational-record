@@ -93,8 +93,7 @@ import Database.Relational
            schemaNameMode, nameConfig, identifierQuotation),
    relationalQuerySQL, Query, relationalQuery, KeyUpdate,
    Insert, insert, InsertQuery, insertQuery,
-   HasConstraintKey(constraintKey), Primary, NotNull, primarySelect, primaryUpdate,
-   defaultPlaceholders, )
+   HasConstraintKey(constraintKey), Primary, NotNull, primarySelect, primaryUpdate,)
 
 import Database.Relational.SqlSyntax (attachEmptyPlaceholderOffsets, detachPlaceholderOffsets,)
 import Database.Relational.InternalTH.Base (defineTuplePi, defineRecordProjections)
@@ -223,10 +222,10 @@ defineTableDerivations tableVar' relVar' insVar' insQVar' recordType' = do
              [| derivedRelation |]
   let insVar   = varName insVar'
   insDs   <- simpleValD insVar   [t| Insert $recordType' |]
-             [| insert defaultPlaceholders id' |]
+             [| insert id' |]
   let insQVar  = varName insQVar'
   insQDs  <- simpleValD insQVar  [t| forall p. PersistableWidth p => Relation p $recordType' -> InsertQuery p |]
-             [| insertQuery defaultPlaceholders id' |]
+             [| insertQuery id' |]
   return $ concat [tableDs, relDs, insDs, insQDs]
 
 -- | 'Table' and 'Relation' templates.
@@ -346,7 +345,7 @@ definePrimaryQuery toDef' paramType recType relE = do
   let toDef = varName toDef'
   simpleValD toDef
     [t| Query $paramType $recType |]
-    [|  relationalQuery defaultPlaceholders (primarySelect $relE) |]
+    [|  relationalQuery (primarySelect $relE) |]
 
 -- | Template of derived primary 'Update'.
 definePrimaryUpdate :: VarName -- ^ Variable name of result declaration
@@ -459,7 +458,7 @@ inlineQuery :: PersistableWidth p
 inlineQuery relVar rel config sufs qns = do
   (p, r) <- reifyRelation relVar
   unsafeInlineQuery (return p) (return r)
-    (detachPlaceholderOffsets $ relationalQuerySQL config defaultPlaceholders rel sufs)
+    (detachPlaceholderOffsets $ relationalQuerySQL config rel sufs)
     (varCamelcaseName qns)
 
 -- | Generate all templates against defined record like type constructor

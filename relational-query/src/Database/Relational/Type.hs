@@ -61,14 +61,12 @@ import Data.Monoid ((<>))
 import Database.Record (PersistableWidth)
 
 import Database.Relational.Internal.Config (Config, defaultConfig)
-import Database.Relational.Internal.ContextType (PureOperand)
 import Database.Relational.Internal.String (showStringSQL)
 
-import Database.Relational.Monad.BaseType (Relation, sqlFromRelationWith)
+import Database.Relational.Monad.BaseType (Relation, sqlFromRelationWith, defaultPlaceholders)
 import Database.Relational.Monad.Restrict (RestrictedStatement)
 import Database.Relational.Monad.Assign (AssignStatement)
 import Database.Relational.Monad.Register (Register)
-import Database.Relational.Record (pempty)
 import Database.Relational.Relation (tableOf)
 import Database.Relational.Effect
   (Restriction, restriction', UpdateTarget, updateTarget',
@@ -82,7 +80,7 @@ import Database.Relational.ProjectableClass (LiteralSQL)
 import Database.Relational.SimpleSql
   (QuerySuffix, showsQuerySuffix, insertPrefixSQL,
    updateOtherThanKeySQL, updatePrefixSQL, deletePrefixSQL)
-import Database.Relational.SqlSyntax (Record, SQLWithPlaceholderOffsets, detachPlaceholderOffsets)
+import Database.Relational.SqlSyntax (SQLWithPlaceholderOffsets, detachPlaceholderOffsets)
 
 
 -- | Query type with place-holder parameter 'p' and query result type 'a'.
@@ -98,16 +96,16 @@ instance Show (Query p a) where
   show = detachPlaceholderOffsets . untypeQuery
 
 -- | From 'Relation' into untyped SQL query string.
-relationalQuerySQL :: Config -> Record PureOperand p -> Relation p r -> QuerySuffix -> SQLWithPlaceholderOffsets
-relationalQuerySQL config phs rel qsuf = (\s -> showStringSQL $ s <> showsQuerySuffix qsuf) <$> sqlFromRelationWith rel phs config
+relationalQuerySQL :: PersistableWidth p => Config -> Relation p r -> QuerySuffix -> SQLWithPlaceholderOffsets
+relationalQuerySQL config rel qsuf = (\s -> showStringSQL $ s <> showsQuerySuffix qsuf) <$> sqlFromRelationWith rel defaultPlaceholders config
 
 -- | From 'Relation' into typed 'Query' with suffix SQL words.
-relationalQuery' :: Record PureOperand p -> Relation p r -> QuerySuffix -> Query p r
-relationalQuery' phs rel qsuf = unsafeTypedQuery $ relationalQuerySQL defaultConfig phs rel qsuf
+relationalQuery' :: PersistableWidth p => Relation p r -> QuerySuffix -> Query p r
+relationalQuery' rel qsuf = unsafeTypedQuery $ relationalQuerySQL defaultConfig rel qsuf
 
 -- | From 'Relation' into typed 'Query'.
-relationalQuery :: Record PureOperand p -> Relation p r -> Query p r
-relationalQuery phs rel = relationalQuery' phs rel []
+relationalQuery :: PersistableWidth p => Relation p r -> Query p r
+relationalQuery rel = relationalQuery' rel []
 
 
 -- | Update type with key type 'p' and update record type 'a'.
@@ -154,42 +152,42 @@ unsafeTypedUpdate :: SQLWithPlaceholderOffsets -> Update p
 unsafeTypedUpdate =  Update
 
 -- | Make untyped update SQL string from 'Table' and 'UpdateTarget'.
-updateSQL :: Config -> Record PureOperand p -> Table r -> UpdateTarget p r -> SQLWithPlaceholderOffsets
-updateSQL config phs tbl ut = showStringSQL . (updatePrefixSQL tbl <>) <$> sqlFromUpdateTarget config phs tbl ut
+updateSQL :: PersistableWidth p => Config -> Table r -> UpdateTarget p r -> SQLWithPlaceholderOffsets
+updateSQL config tbl ut = showStringSQL . (updatePrefixSQL tbl <>) <$> sqlFromUpdateTarget config defaultPlaceholders tbl ut
 
 -- | Make typed 'Update' from 'Config', 'Table' and 'UpdateTarget'.
-typedUpdate' :: Config -> Record PureOperand p -> Table r -> UpdateTarget p r -> Update p
-typedUpdate' config phs tbl ut = unsafeTypedUpdate $ updateSQL config phs tbl ut
+typedUpdate' :: PersistableWidth p => Config -> Table r -> UpdateTarget p r -> Update p
+typedUpdate' config tbl ut = unsafeTypedUpdate $ updateSQL config tbl ut
 
 {-# DEPRECATED typedUpdate "use `typedUpdate' defaultConfig` instead of this." #-}
 -- | Make typed 'Update' using 'defaultConfig', 'Table' and 'UpdateTarget'.
-typedUpdate :: Record PureOperand p -> Table r -> UpdateTarget p r -> Update p
+typedUpdate :: PersistableWidth p => Table r -> UpdateTarget p r -> Update p
 typedUpdate =  typedUpdate' defaultConfig
 
 targetTable :: TableDerivable r => UpdateTarget p r -> Table r
 targetTable =  const derivedTable
 
 -- | Make typed 'Update' from 'Config', derived table and 'AssignStatement'
-update' :: TableDerivable r => Config -> Record PureOperand p -> AssignStatement p r () -> Update p
-update' config phs utc =  typedUpdate' config phs (targetTable ut) ut  where
+update' :: (PersistableWidth p, TableDerivable r) => Config -> AssignStatement p r () -> Update p
+update' config utc =  typedUpdate' config (targetTable ut) ut  where
   ut = updateTarget' utc
 
 {-# DEPRECATED derivedUpdate' "use `update'` instead of this." #-}
 -- | Make typed 'Update' from 'Config', derived table and 'AssignStatement'
-derivedUpdate' :: TableDerivable r => Config -> Record PureOperand p -> AssignStatement p r () -> Update p
+derivedUpdate' :: (PersistableWidth p, TableDerivable r) => Config -> AssignStatement p r () -> Update p
 derivedUpdate' = update'
 
 -- | Make typed 'Update' from 'defaultConfig', derived table and 'AssignStatement'
-update :: TableDerivable r => Record PureOperand p -> AssignStatement p r () -> Update p
+update :: (PersistableWidth p, TableDerivable r) => AssignStatement p r () -> Update p
 update = update' defaultConfig
 
 -- | Make typed 'Update' from 'defaultConfig', derived table and 'AssignStatement' with no(unit) placeholder.
 updateNoPH :: TableDerivable r => AssignStatement () r () -> Update ()
-updateNoPH = update pempty
+updateNoPH = update
 
 {-# DEPRECATED derivedUpdate "use `update` instead of this." #-}
 -- | Make typed 'Update' from 'defaultConfig', derived table and 'AssignStatement'
-derivedUpdate :: TableDerivable r => Record PureOperand p -> AssignStatement p r () -> Update p
+derivedUpdate :: (PersistableWidth p, TableDerivable r) => AssignStatement p r () -> Update p
 derivedUpdate = update
 
 
@@ -197,17 +195,15 @@ derivedUpdate = update
 --   Update target is all column.
 typedUpdateAllColumn' :: (PersistableWidth p, PersistableWidth r)
                       => Config
-                      -> Record PureOperand (r, p)
                       -> Table r
                       -> Restriction p r
                       -> Update (r, p)
-typedUpdateAllColumn' config phs tbl r = typedUpdate' config phs tbl $ liftTargetAllColumn' r
+typedUpdateAllColumn' config tbl r = typedUpdate' config tbl $ liftTargetAllColumn' r
 
 -- | Make typed 'Update' from 'Table' and 'Restriction'.
 --   Update target is all column.
 typedUpdateAllColumn :: (PersistableWidth p, PersistableWidth r)
-                     => Record PureOperand (r, p)
-                     -> Table r
+                     => Table r
                      -> Restriction p r
                      -> Update (r, p)
 typedUpdateAllColumn = typedUpdateAllColumn' defaultConfig
@@ -216,17 +212,15 @@ typedUpdateAllColumn = typedUpdateAllColumn' defaultConfig
 --   Update target is all column.
 updateAllColumn' :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
                  => Config
-                 -> Record PureOperand (r, p)
                  -> RestrictedStatement p r ()
                  -> Update (r, p)
-updateAllColumn' config phs = typedUpdateAllColumn' config phs derivedTable . restriction'
+updateAllColumn' config = typedUpdateAllColumn' config derivedTable . restriction'
 
 {-# DEPRECATED derivedUpdateAllColumn' "use `updateAllColumn'` instead of this." #-}
 -- | Make typed 'Update' from 'Config', derived table and 'AssignStatement'.
 --   Update target is all column.
 derivedUpdateAllColumn' :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
                         => Config
-                        -> Record PureOperand (r, p)
                         -> RestrictedStatement p r ()
                         -> Update (r, p)
 derivedUpdateAllColumn' = updateAllColumn'
@@ -234,8 +228,7 @@ derivedUpdateAllColumn' = updateAllColumn'
 -- | Make typed 'Update' from 'defaultConfig', derived table and 'AssignStatement'.
 --   Update target is all column.
 updateAllColumn :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
-                => Record PureOperand (r, p)
-                -> RestrictedStatement p r ()
+                => RestrictedStatement p r ()
                 -> Update (r, p)
 updateAllColumn = updateAllColumn' defaultConfig
 
@@ -254,8 +247,7 @@ updateAllColumnNoPH = error "igrep TODO: Make type checks!"
 -- | Make typed 'Update' from 'defaultConfig', derived table and 'AssignStatement'.
 --   Update target is all column.
 derivedUpdateAllColumn :: (PersistableWidth p, PersistableWidth r, TableDerivable r)
-                       =>  Record PureOperand (r, p)
-                       -> RestrictedStatement p r ()
+                       => RestrictedStatement p r ()
                        -> Update (r, p)
 derivedUpdateAllColumn = updateAllColumn
 
@@ -288,62 +280,62 @@ unsafeTypedInsert :: SQLWithPlaceholderOffsets -> Insert a
 unsafeTypedInsert s = Insert s Nothing
 
 -- | Make typed 'Insert' from 'Table' and columns selector 'Pi' with configuration parameter.
-typedInsert' :: PersistableWidth r => Config -> Record PureOperand r' -> Table r -> Pi r r' -> Insert r'
-typedInsert' config phs tbl =
-  typedInsertValue' config phs tbl . insertTarget' . piRegister
+typedInsert' :: (PersistableWidth r', PersistableWidth r) => Config -> Table r -> Pi r r' -> Insert r'
+typedInsert' config tbl =
+  typedInsertValue' config tbl . insertTarget' . piRegister
 
 {-# DEPRECATED typedInsert "use `typedInsert' defaultConfig` instead of this." #-}
 -- | Make typed 'Insert' from 'Table' and columns selector 'Pi'.
-typedInsert :: PersistableWidth r => Record PureOperand r' -> Table r -> Pi r r' -> Insert r'
+typedInsert :: (PersistableWidth r', PersistableWidth r) => Table r -> Pi r r' -> Insert r'
 typedInsert =  typedInsert' defaultConfig
 
 -- | Table type inferred 'Insert'.
-insert :: (PersistableWidth r, TableDerivable r) => Record PureOperand r' -> Pi r r' -> Insert r'
-insert phs = typedInsert' defaultConfig phs derivedTable
+insert :: (PersistableWidth r, PersistableWidth r', TableDerivable r) => Pi r r' -> Insert r'
+insert = typedInsert' defaultConfig derivedTable
 
 {-# DEPRECATED derivedInsert "use `insert` instead of this." #-}
 -- | Table type inferred 'Insert'.
-derivedInsert :: (PersistableWidth r, TableDerivable r) => Record PureOperand r' -> Pi r r' -> Insert r'
+derivedInsert :: (PersistableWidth r, PersistableWidth r', TableDerivable r) => Pi r r' -> Insert r'
 derivedInsert = insert
 
 -- | Make typed 'Insert' from 'Config', 'Table' and monadic builded 'InsertTarget' object.
-typedInsertValue' :: Config -> Record PureOperand p -> Table r -> InsertTarget p r -> Insert p
-typedInsertValue' config phs tbl it =
+typedInsertValue' :: PersistableWidth p => Config -> Table r -> InsertTarget p r -> Insert p
+typedInsertValue' config tbl it =
     unsafeTypedInsert'
-      (showStringSQL <$> sqlFromInsertTarget config phs tbl it)
+      (showStringSQL <$> sqlFromInsertTarget config defaultPlaceholders tbl it)
       (showStringSQL <$> ci)
       n
   where
-    (ci, n) = sqlChunkFromInsertTarget config phs tbl it
+    (ci, n) = sqlChunkFromInsertTarget config defaultPlaceholders tbl it
 
 {-# DEPRECATED typedInsertValue "use `typedInsertValue' defaultConfig` instead of this." #-}
 -- | Make typed 'Insert' from 'Table' and monadic builded 'InsertTarget' object.
-typedInsertValue :: Record PureOperand p -> Table r -> InsertTarget p r -> Insert p
+typedInsertValue :: PersistableWidth p => Table r -> InsertTarget p r -> Insert p
 typedInsertValue = typedInsertValue' defaultConfig
 
 -- | Make typed 'Insert' from 'Config', derived table and monadic builded 'Register' object.
-insertValue' :: TableDerivable r => Config -> Record PureOperand p -> Register p r () -> Insert p
-insertValue' config phs rs = typedInsertValue' config phs (rt rs) $ insertTarget' rs
+insertValue' :: (PersistableWidth p, TableDerivable r) => Config -> Register p r () -> Insert p
+insertValue' config rs = typedInsertValue' config (rt rs) $ insertTarget' rs
   where
     rt :: TableDerivable r => Register p r () -> Table r
     rt =  const derivedTable
 
 {-# DEPRECATED derivedInsertValue' "use `insertValue'` instead of this." #-}
 -- | Make typed 'Insert' from 'Config', derived table and monadic builded 'Register' object.
-derivedInsertValue' :: TableDerivable r => Config -> Record PureOperand p -> Register p r () -> Insert p
+derivedInsertValue' :: (PersistableWidth p, TableDerivable r) => Config -> Register p r () -> Insert p
 derivedInsertValue' = insertValue'
 
 -- | Make typed 'Insert' from 'defaultConfig', derived table and monadic builded 'Register' object.
-insertValue :: TableDerivable r => Record PureOperand p -> Register p r () -> Insert p
+insertValue :: (PersistableWidth p, TableDerivable r) => Register p r () -> Insert p
 insertValue = insertValue' defaultConfig
 
 -- | Make typed 'Insert' from 'defaultConfig', derived table and monadic builded 'Register' object with no(unit) placeholder.
 insertValueNoPH :: TableDerivable r => Register () r () -> Insert ()
-insertValueNoPH = insertValue pempty
+insertValueNoPH = insertValue
 
 {-# DEPRECATED derivedInsertValue "use `insertValue` instead of this." #-}
 -- | Make typed 'Insert' from 'defaultConfig', derived table and monadic builded 'Register' object.
-derivedInsertValue :: TableDerivable r => Record PureOperand p -> Register p r () -> Insert p
+derivedInsertValue :: (PersistableWidth p, TableDerivable r) => Register p r () -> Insert p
 derivedInsertValue = insertValue
 
 -- | Make typed 'Insert' list from 'Config' and records list.
@@ -375,25 +367,25 @@ unsafeTypedInsertQuery :: SQLWithPlaceholderOffsets -> InsertQuery p
 unsafeTypedInsertQuery =  InsertQuery
 
 -- | Make untyped insert select SQL string from 'Table', 'Pi' and 'Relation'.
-insertQuerySQL :: Config -> Record PureOperand p -> Table r -> Pi r r' -> Relation p r' -> SQLWithPlaceholderOffsets
-insertQuerySQL config phs tbl pi' rel = showStringSQL . (insertPrefixSQL pi' tbl <>) <$> sqlFromRelationWith rel phs config
+insertQuerySQL :: PersistableWidth p => Config -> Table r -> Pi r r' -> Relation p r' -> SQLWithPlaceholderOffsets
+insertQuerySQL config tbl pi' rel = showStringSQL . (insertPrefixSQL pi' tbl <>) <$> sqlFromRelationWith rel defaultPlaceholders config
 
 -- | Make typed 'InsertQuery' from columns selector 'Table', 'Pi' and 'Relation' with configuration parameter.
-typedInsertQuery' :: Config -> Record PureOperand p -> Table r -> Pi r r' -> Relation p r' -> InsertQuery p
-typedInsertQuery' config phs tbl pi' = unsafeTypedInsertQuery . insertQuerySQL config phs tbl pi'
+typedInsertQuery' :: PersistableWidth p => Config -> Table r -> Pi r r' -> Relation p r' -> InsertQuery p
+typedInsertQuery' config tbl pi' = unsafeTypedInsertQuery . insertQuerySQL config tbl pi'
 
 {-# DEPRECATED typedInsertQuery "use `typedInsertQuery' defaultConfig` instead of this." #-}
 -- | Make typed 'InsertQuery' from columns selector 'Table', 'Pi' and 'Relation'.
-typedInsertQuery :: Record PureOperand p -> Table r -> Pi r r' -> Relation p r' -> InsertQuery p
+typedInsertQuery :: PersistableWidth p => Table r -> Pi r r' -> Relation p r' -> InsertQuery p
 typedInsertQuery =  typedInsertQuery' defaultConfig
 
 -- | Table type inferred 'InsertQuery'.
-insertQuery :: TableDerivable r => Record PureOperand p -> Pi r r' -> Relation p r' -> InsertQuery p
-insertQuery phs = typedInsertQuery' defaultConfig phs derivedTable
+insertQuery :: (PersistableWidth p, TableDerivable r) => Pi r r' -> Relation p r' -> InsertQuery p
+insertQuery = typedInsertQuery' defaultConfig derivedTable
 
 {-# DEPRECATED derivedInsertQuery "use `insertQuery` instead of this." #-}
 -- | Table type inferred 'InsertQuery'.
-derivedInsertQuery :: TableDerivable r => Record PureOperand p -> Pi r r' -> Relation p r' -> InsertQuery p
+derivedInsertQuery :: (PersistableWidth p, TableDerivable r) => Pi r r' -> Relation p r' -> InsertQuery p
 derivedInsertQuery =  insertQuery
 
 -- | Show insert SQL string.
@@ -409,42 +401,42 @@ unsafeTypedDelete :: SQLWithPlaceholderOffsets -> Delete p
 unsafeTypedDelete =  Delete
 
 -- | Make untyped delete SQL string from 'Table' and 'Restriction'.
-deleteSQL :: Config -> Record PureOperand p -> Table r -> Restriction p r -> SQLWithPlaceholderOffsets
-deleteSQL config phs tbl = fmap (showStringSQL . (deletePrefixSQL tbl <>)) . sqlWhereFromRestriction config phs tbl
+deleteSQL :: PersistableWidth p => Config -> Table r -> Restriction p r -> SQLWithPlaceholderOffsets
+deleteSQL config tbl = fmap (showStringSQL . (deletePrefixSQL tbl <>)) . sqlWhereFromRestriction config defaultPlaceholders tbl
 
 -- | Make typed 'Delete' from 'Config', 'Table' and 'Restriction'.
-typedDelete' :: Config -> Record PureOperand p -> Table r -> Restriction p r -> Delete p
-typedDelete' config phs tbl = unsafeTypedDelete . deleteSQL config phs tbl
+typedDelete' :: PersistableWidth p => Config -> Table r -> Restriction p r -> Delete p
+typedDelete' config tbl = unsafeTypedDelete . deleteSQL config tbl
 
 {-# DEPRECATED typedDelete "use `typedDelete' defaultConfig` instead of this." #-}
 -- | Make typed 'Delete' from 'Table' and 'Restriction'.
-typedDelete :: Record PureOperand p -> Table r -> Restriction p r -> Delete p
+typedDelete :: PersistableWidth p => Table r -> Restriction p r -> Delete p
 typedDelete =  typedDelete' defaultConfig
 
 restrictedTable :: TableDerivable r => Restriction p r -> Table r
 restrictedTable =  const derivedTable
 
 -- | Make typed 'Delete' from 'Config', derived table and 'RestrictContext'
-delete' :: TableDerivable r => Config -> Record PureOperand p -> RestrictedStatement p r () -> Delete p
-delete' config phs rc = typedDelete' config phs (restrictedTable rs) rs  where
+delete' :: (PersistableWidth p, TableDerivable r) => Config -> RestrictedStatement p r () -> Delete p
+delete' config rc = typedDelete' config (restrictedTable rs) rs  where
   rs = restriction' rc
 
 {-# DEPRECATED derivedDelete' "use `delete'` instead of this." #-}
 -- | Make typed 'Delete' from 'Config', derived table and 'RestrictContext'
-derivedDelete' :: TableDerivable r => Config -> Record PureOperand p -> RestrictedStatement p r () -> Delete p
+derivedDelete' :: (PersistableWidth p, TableDerivable r) => Config -> RestrictedStatement p r () -> Delete p
 derivedDelete' = delete'
 
 -- | Make typed 'Delete' from 'defaultConfig', derived table and 'RestrictContext'
-delete :: TableDerivable r => Record PureOperand p -> RestrictedStatement p r () -> Delete p
+delete :: (PersistableWidth p, TableDerivable r) => RestrictedStatement p r () -> Delete p
 delete = delete' defaultConfig
 
 -- | Make typed 'Delete' from 'defaultConfig', derived table and 'RestrictContext' with no(unit) placeholder.
 deleteNoPH :: TableDerivable r => RestrictedStatement () r () -> Delete ()
-deleteNoPH = delete pempty
+deleteNoPH = delete
 
 {-# DEPRECATED derivedDelete "use `delete` instead of this." #-}
 -- | Make typed 'Delete' from 'defaultConfig', derived table and 'RestrictContext'
-derivedDelete :: TableDerivable r => Record PureOperand p -> RestrictedStatement p r () -> Delete p
+derivedDelete :: (PersistableWidth p, TableDerivable r) => RestrictedStatement p r () -> Delete p
 derivedDelete = delete
 
 -- | Show delete SQL string

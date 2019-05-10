@@ -20,7 +20,7 @@ import Data.Time (LocalTime, Day, TimeOfDay)
 import Database.Relational (Query, Relation, Record, Flat, PureOperand,
                             fst', snd', (!), (.=.), (><), asc, relationalQuery, just,
                             query, relation', unsafeShowSql,
-                            unsafeProjectSql, wheres, toFlat, defaultPlaceholders)
+                            unsafeProjectSql, wheres, toFlat,)
 import Database.Relational.Schema.SQLServerSyscat.Columns
 import Database.Relational.Schema.SQLServerSyscat.Indexes
 import Database.Relational.Schema.SQLServerSyscat.IndexColumns
@@ -96,7 +96,7 @@ columnTypeRelation = relation' $ \ph -> do
         "SCHEMA_NAME(" ++ unsafeShowSql i ++ ")"
 
 columnTypeQuerySQL :: Query (String, String) ((Columns, Types), String)
-columnTypeQuerySQL =  relationalQuery defaultPlaceholders columnTypeRelation
+columnTypeQuerySQL =  relationalQuery columnTypeRelation
 
 primaryKeyRelation :: Relation (String,String) (Maybe String)
 primaryKeyRelation = relation' $ \ph -> do
@@ -113,4 +113,4 @@ primaryKeyRelation = relation' $ \ph -> do
     return   (cols  ! Columns.name')
 
 primaryKeyQuerySQL :: Query (String,String) (Maybe String)
-primaryKeyQuerySQL =  relationalQuery defaultPlaceholders primaryKeyRelation
+primaryKeyQuerySQL =  relationalQuery primaryKeyRelation
