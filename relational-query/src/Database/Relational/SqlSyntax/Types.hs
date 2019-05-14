@@ -48,17 +48,23 @@ module Database.Relational.SqlSyntax.Types (
 
   -- * Manipulate placeholders referred in the statement.
   PlaceholderOffsets,
-  WithPlaceholderOffsets (WithPlaceholderOffsets),
-  withPlaceholderOffsets,
+  WithPlaceholderOffsetsT (WithPlaceholderOffsetsT),
+  WithPlaceholderOffsets,
   SQLWithPlaceholderOffsets',
   SQLWithPlaceholderOffsets,
+
+  appendPlaceholderOffsets,
+  withPlaceholderOffsets,
+  runWithPlaceholderOffsetsT,
 
   )  where
 
 import Prelude hiding (and, product)
-import Control.Monad.Trans.Writer (Writer, writer)
+import Control.Monad.Trans.Class (MonadTrans)
+import Control.Monad.Trans.Writer (WriterT, runWriterT, writer, tell)
 import Data.DList (DList)
 import Data.Foldable (Foldable)
+import Data.Functor.Identity (Identity)
 import Data.Monoid (Monoid, mempty)
 import Data.Semigroup (Semigroup, (<>))
 import Data.Traversable (Traversable)
@@ -212,9 +218,14 @@ mapTypedTuple f = Record . fmap f . toTypedTuple
 -- igrep TODO: Rename into Placeholders
 type PlaceholderOffsets = DList Int
 
-newtype WithPlaceholderOffsets a =
-  WithPlaceholderOffsets (Writer PlaceholderOffsets a)
-  deriving (Show, Functor, Applicative, Foldable, Traversable)
+newtype WithPlaceholderOffsetsT m a =
+  WithPlaceholderOffsetsT (WriterT PlaceholderOffsets m a)
+  deriving (Show, Functor, Applicative, Monad, Foldable, Traversable, MonadTrans)
+
+appendPlaceholderOffsets :: Monad m => PlaceholderOffsets -> WithPlaceholderOffsetsT m ()
+appendPlaceholderOffsets = WithPlaceholderOffsetsT . tell
+
+type WithPlaceholderOffsets = WithPlaceholderOffsetsT Identity
 
 type SQLWithPlaceholderOffsets' = WithPlaceholderOffsets StringSQL
 
@@ -228,7 +239,10 @@ instance Monoid a => Monoid (WithPlaceholderOffsets a) where
   mempty = withPlaceholderOffsets mempty mempty
 
 withPlaceholderOffsets :: PlaceholderOffsets -> a -> WithPlaceholderOffsets a
-withPlaceholderOffsets phs x = WithPlaceholderOffsets $ writer (x, phs)
+withPlaceholderOffsets phs x = WithPlaceholderOffsetsT $ writer (x, phs)
+
+runWithPlaceholderOffsetsT :: WithPlaceholderOffsetsT m a -> m (a, PlaceholderOffsets)
+runWithPlaceholderOffsetsT (WithPlaceholderOffsetsT act) = runWriterT act
 
 -- | Unsafely type 'Tuple' value to 'TypedTuple' type.
 forciblyTypeTuple :: Tuple -> TypedTuple c t

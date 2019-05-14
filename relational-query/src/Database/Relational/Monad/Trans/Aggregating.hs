@@ -39,13 +39,14 @@ import Data.Functor.Identity (Identity (runIdentity))
 import Database.Relational.Internal.ContextType
   (Flat, Aggregated, Set, Power, SetList)
 import Database.Relational.SqlSyntax
-  (Record (Record), toTypedTuple,
+  (Record,
    AggregateColumnRef, AggregateElem, aggregateColumnRef, AggregateSet, aggregateGroupingSet,
    AggregateBitKey, aggregatePowerKey, aggregateRollup, aggregateCube, aggregateSets,
    AggregateKey, aggregateKeyRecord, aggregateKeyElement, unsafeAggregateKey,
-   WithPlaceholderOffsets, withPlaceholderOffsets, placeholderOffsets,
-   detachPlaceholderOffsets, attachEmptyPlaceholderOffsets,
-   untypeRecordWithPlaceholderOffsets, emptyPlaceholderOffsetsOfRecord,)
+   WithPlaceholderOffsetsT (WithPlaceholderOffsetsT), WithPlaceholderOffsets,
+   runWithPlaceholderOffsetsT, withPlaceholderOffsets, appendPlaceholderOffsets,
+   tupleFromPlaceholderOffsets, record,
+   untypeRecord, untypeRecordWithPlaceholderOffsets, emptyPlaceholderOffsetsOfRecord,)
 
 import qualified Database.Relational.Record as Record
 import Database.Relational.Monad.Class
@@ -57,7 +58,14 @@ import Database.Relational.Monad.Class
 --   aggregating key sets set building and partition key set building.
 --   Type 'at' is aggregating term type.
 newtype Aggregatings ac at m a =
-  Aggregatings (WriterT (WithPlaceholderOffsets (DList at)) m a)
+  Aggregatings { unAggregatings :: (WithPlaceholderOffsetsT (AggregatingsBase ac at m) a) }
+  deriving (Monad, Functor, Applicative)
+
+instance MonadTrans (Aggregatings ac at) where
+  lift = Aggregatings . lift . lift
+
+newtype AggregatingsBase ac at m a =
+  AggregatingsBase { unAggregatingsBase :: (WriterT (DList at) m a) }
   deriving (MonadTrans, Monad, Functor, Applicative)
 
 -- | Lift to 'Aggregatings'.
@@ -65,16 +73,19 @@ aggregatings :: Monad m => m a -> Aggregatings ac at m a
 aggregatings =  lift
 
 -- | Context type building one grouping set.
-type AggregatingSetT      = Aggregatings Set       AggregateElem
+type AggregatingSetT      = Aggregatings     Set       AggregateElem
+
+-- | Context type building one grouping set.
+type AggregatingSetBaseT  = AggregatingsBase Set       AggregateElem
 
 -- | Context type building grouping sets list.
-type AggregatingSetListT  = Aggregatings SetList   AggregateSet
+type AggregatingSetListT  = AggregatingsBase SetList   AggregateSet
 
 -- | Context type building power group set.
-type AggregatingPowerSetT = Aggregatings Power     AggregateBitKey
+type AggregatingPowerSetT = AggregatingsBase Power     AggregateBitKey
 
 -- | Context type building partition keys set.
-type PartitioningSetT c   = Aggregatings c         AggregateColumnRef
+type PartitioningSetT c   = Aggregatings     c         AggregateColumnRef
 
 -- | Aggregated 'MonadRestrict'.
 instance MonadRestrict c m => MonadRestrict c (AggregatingSetT m) where
@@ -91,39 +102,53 @@ instance MonadQuery m => MonadQuery (AggregatingSetT m) where
   query' ph          = aggregatings . query' ph
   queryMaybe' ph     = aggregatings . queryMaybe' ph
 
-unsafeAggregateWithTerm :: Monad m => WithPlaceholderOffsets at -> Aggregatings ac at m ()
-unsafeAggregateWithTerm =  Aggregatings . tell . fmap singleton
+unsafeAggregateWithTerm :: Monad m => at -> AggregatingsBase ac at m ()
+unsafeAggregateWithTerm =  AggregatingsBase . tell . singleton
 
-unsafeAggregateWithTerms :: Monad m => WithPlaceholderOffsets [at] -> Aggregatings ac at m ()
-unsafeAggregateWithTerms =  Aggregatings . tell . fmap fromList
+unsafeAggregateWithTerms :: Monad m => [at] -> AggregatingsBase ac at m ()
+unsafeAggregateWithTerms =  AggregatingsBase . tell . fromList
 
-aggregateKey :: Monad m => AggregateKey (WithPlaceholderOffsets a) -> Aggregatings ac AggregateElem m (WithPlaceholderOffsets a)
+aggregateKey :: Monad m => AggregateKey a -> AggregatingsBase ac AggregateElem m a
 aggregateKey k = do
-  let e = aggregateKeyElement k
-      phs = placeholderOffsets $ aggregateKeyRecord k
-  unsafeAggregateWithTerm $ withPlaceholderOffsets phs e
-  return . attachEmptyPlaceholderOffsets . detachPlaceholderOffsets $ aggregateKeyRecord k
+  unsafeAggregateWithTerm $ aggregateKeyElement k
+  return $ aggregateKeyRecord k
 
 -- | Aggregated query instance.
 instance MonadQuery m => MonadAggregate (AggregatingSetT m) where
   groupBy p = do
-    unsafeAggregateWithTerms (map aggregateColumnRef <$> untypeRecordWithPlaceholderOffsets p)
+    let (ts, phs) = tupleFromPlaceholderOffsets $ untypeRecordWithPlaceholderOffsets p
+    Aggregatings $ do
+      lift . unsafeAggregateWithTerms $ map aggregateColumnRef ts
+      appendPlaceholderOffsets phs
     return . emptyPlaceholderOffsetsOfRecord $ Record.unsafeToAggregated p
-  groupBy' = fmap Record . aggregateKey . fmap toTypedTuple
+  groupBy' kr = do
+    r <- Aggregatings . lift $ aggregateKey kr
+    let (ts, phs) = tupleFromPlaceholderOffsets $ untypeRecordWithPlaceholderOffsets r
+    Aggregatings $ appendPlaceholderOffsets phs
+    return $ record mempty ts
 
 -- | Partition clause instance
 instance Monad m => MonadPartition c (PartitioningSetT c m) where
-  partitionBy =  unsafeAggregateWithTerms . untypeRecordWithPlaceholderOffsets
+  partitionBy r = Aggregatings $ do
+    lift $ unsafeAggregateWithTerms ts
+    appendPlaceholderOffsets phs
+   where
+    (ts, phs) = tupleFromPlaceholderOffsets $ untypeRecordWithPlaceholderOffsets r
 
 -- | Run 'Aggregatings' to get terms list.
 extractAggregateTerms :: (Monad m, Functor m) => Aggregatings ac at m a -> m (a, WithPlaceholderOffsets [at])
-extractAggregateTerms (Aggregatings ac) = second (fmap toList) <$> runWriterT ac
+extractAggregateTerms = fmap f . runWriterT . unAggregatingsBase . runWithPlaceholderOffsetsT . unAggregatings
+ where
+  f ((x, phs), ats) = (x, withPlaceholderOffsets phs $ toList ats)
 
-extractTermList :: Aggregatings ac at Identity a -> (a, WithPlaceholderOffsets [at])
-extractTermList =  runIdentity . extractAggregateTerms
+extractAggregateTermsBase :: (Monad m, Functor m) => AggregatingsBase ac at m a -> m (a, [at])
+extractAggregateTermsBase (AggregatingsBase ac) = second toList <$> runWriterT ac
+
+extractTermList :: AggregatingsBase ac at Identity a -> (a, [at])
+extractTermList =  runIdentity . extractAggregateTermsBase
 
 -- | Context monad type to build single grouping set.
-type AggregatingSet      = AggregatingSetT      Identity
+type AggregatingSet      = AggregatingSetBaseT  Identity
 
 -- | Context monad type to build grouping power set.
 type AggregatingPowerSet = AggregatingPowerSetT Identity
@@ -138,19 +163,19 @@ type PartitioningSet c   = PartitioningSetT c   Identity
 key :: Record Flat r
     -> AggregatingSet (Record Aggregated (Maybe r))
 key p = do
-  unsafeAggregateWithTerms (map aggregateColumnRef <$> untypeRecordWithPlaceholderOffsets p)
-  return . emptyPlaceholderOffsetsOfRecord . Record.just $ Record.unsafeToAggregated p
+  mapM_ unsafeAggregateWithTerm [ aggregateColumnRef col | col <- untypeRecord p]
+  return . Record.just $ Record.unsafeToAggregated p
 
 -- | Specify key of single grouping set.
-key' :: AggregateKey (WithPlaceholderOffsets a)
-     -> AggregatingSet (WithPlaceholderOffsets a)
+key' :: AggregateKey a
+     -> AggregatingSet a
 key' = aggregateKey
 
 -- | Finalize and specify single grouping set.
 set :: AggregatingSet a
     -> AggregatingSetList a
 set s = do
-  let (p, c) = second (fmap aggregateGroupingSet) . extractTermList $ s
+  let (p, c) = second aggregateGroupingSet . extractTermList $ s
   unsafeAggregateWithTerm c
   return p
 
@@ -158,21 +183,21 @@ set s = do
 bkey :: Record Flat r
      -> AggregatingPowerSet (Record Aggregated (Maybe r))
 bkey p = do
-  unsafeAggregateWithTerm (aggregatePowerKey <$> untypeRecordWithPlaceholderOffsets p)
-  return . emptyPlaceholderOffsetsOfRecord . Record.just $ Record.unsafeToAggregated p
+  unsafeAggregateWithTerm . aggregatePowerKey $ untypeRecord p
+  return . Record.just $ Record.unsafeToAggregated p
 
 finalizePower :: ([AggregateBitKey] -> AggregateElem)
-              -> AggregatingPowerSet a -> AggregateKey (WithPlaceholderOffsets a)
-finalizePower finalize pow = unsafeAggregateKey . second (fmap finalize) $ extractTermList pow
+              -> AggregatingPowerSet a -> AggregateKey a
+finalizePower finalize pow = unsafeAggregateKey . second finalize $ extractTermList pow
 
 -- | Finalize grouping power set as rollup power set.
-rollup :: AggregatingPowerSet a -> AggregateKey (WithPlaceholderOffsets a)
+rollup :: AggregatingPowerSet a -> AggregateKey a
 rollup =  finalizePower aggregateRollup
 
 -- | Finalize grouping power set as cube power set.
-cube   :: AggregatingPowerSet a -> AggregateKey (WithPlaceholderOffsets a)
+cube   :: AggregatingPowerSet a -> AggregateKey a
 cube   =  finalizePower aggregateCube
 
 -- | Finalize grouping set list.
-groupingSets :: AggregatingSetList a -> AggregateKey (WithPlaceholderOffsets a)
-groupingSets =  unsafeAggregateKey . second (fmap aggregateSets) . extractTermList
+groupingSets :: AggregatingSetList a -> AggregateKey a
+groupingSets =  unsafeAggregateKey . second aggregateSets . extractTermList

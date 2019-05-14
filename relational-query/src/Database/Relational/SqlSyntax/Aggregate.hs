@@ -18,9 +18,7 @@ module Database.Relational.SqlSyntax.Aggregate (
 
 import Database.Relational.SqlSyntax.Types
   (AggregateBitKey (..), AggregateSet (..), AggregateElem (..),
-   AggregateColumnRef, AggregateKey (..), WithPlaceholderOffsets, )
-import Database.Relational.SqlSyntax.Placeholders
-  (withPlaceholderOffsets, tupleFromPlaceholderOffsets,)
+   AggregateColumnRef, AggregateKey (..), )
 
 
 -- | Single term aggregation element.
@@ -56,7 +54,5 @@ aggregateKeyElement :: AggregateKey a -> AggregateElem
 aggregateKeyElement (AggregateKey (_p, c)) = c
 
 -- | Unsafely bind typed-record and untyped-term into 'AggregateKey'.
-unsafeAggregateKey :: (a, WithPlaceholderOffsets AggregateElem) -> AggregateKey (WithPlaceholderOffsets a)
-unsafeAggregateKey (x, wphs) =
-  let (e, phs) = tupleFromPlaceholderOffsets wphs
-   in AggregateKey (withPlaceholderOffsets phs x, e)
+unsafeAggregateKey :: (a, AggregateElem) -> AggregateKey a
+unsafeAggregateKey = AggregateKey

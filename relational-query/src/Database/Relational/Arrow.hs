@@ -62,6 +62,8 @@ module Database.Relational.Arrow (
 
   AssignStatement, Register, RestrictedStatement,
 
+  askPlaceholders,
+
   -- * Deprecated
   derivedUpdate', derivedUpdate,
   derivedInsertValue', derivedInsertValue,
@@ -83,15 +85,13 @@ import Database.Relational hiding
    groupBy', key, key', set, bkey, rollup, cube, groupingSets,
    orderBy', orderBy, asc, desc, partitionBy, over,
    update', update, updateNoPH, derivedUpdate', derivedUpdate,
-   updateAllColumn', updateAllColumn, updateAllColumnNoPH,
+   updateAllColumn', updateAllColumn, updateAllColumnNoPH, askPlaceholders,
    insertValue', insertValue, insertValueNoPH, derivedInsertValue', derivedInsertValue,
    delete', delete, deleteNoPH, derivedDelete', derivedDelete,
    QuerySimple, QueryAggregate, QueryUnique, Orderings, Window, Register)
 import qualified Database.Relational as Monadic
 import qualified Database.Relational.Monad.Trans.Aggregating as Monadic
 import qualified Database.Relational.Monad.Trans.Assigning as MonadicAssigning
-import qualified Database.Relational.Monad.Trans.ReadPlaceholders as Monadic
-
 
 -- | Arrow to build queries.
 newtype QueryA m a b = QueryA (Kleisli m a b) deriving (Category, Arrow)
@@ -345,7 +345,7 @@ key = queryA Monadic.key
 
 -- | Same as 'Monadic.key''.
 --   This arrow is designed to be injected by local 'AggregteKey'.
-key' :: AggregatingSet (AggregateKey (Monadic.WithPlaceholderOffsets a)) (Monadic.WithPlaceholderOffsets a)
+key' :: AggregatingSet (AggregateKey a) a
 key' = queryA Monadic.key'
 
 -- | Same as 'Monadic.set'.
@@ -360,17 +360,17 @@ bkey = queryA Monadic.bkey
 
 -- | Same as 'Monadic.rollup'.
 --   Finalize locally built 'AggregatingPowerSet'.
-rollup :: AggregatingPowerSet () a -> AggregateKey (Monadic.WithPlaceholderOffsets a)
+rollup :: AggregatingPowerSet () a -> AggregateKey a
 rollup = runAofM Monadic.rollup
 
 -- | Same as 'Monadic.cube'.
 --   Finalize locally built 'AggregatingPowerSet'.
-cube :: AggregatingPowerSet () a -> AggregateKey (Monadic.WithPlaceholderOffsets a)
+cube :: AggregatingPowerSet () a -> AggregateKey a
 cube = runAofM Monadic.cube
 
 -- | Same as 'Monadic.groupingSets'.
 --   Finalize locally built 'AggregatingSetList'.
-groupingSets :: AggregatingSetList () a -> AggregateKey (Monadic.WithPlaceholderOffsets a)
+groupingSets :: AggregatingSetList () a -> AggregateKey a
 groupingSets = runAofM Monadic.groupingSets
 
 -- | Same as 'Monadic.orderBy''.
@@ -487,6 +487,9 @@ delete = Monadic.delete . runQueryA
 --   Make 'Update' from restrict statement arrow.
 deleteNoPH :: TableDerivable r => RestrictedStatement () r () -> Delete ()
 deleteNoPH = Monadic.deleteNoPH . runQueryA
+
+askPlaceholders :: Monad m => QueryA (ReadPlaceholders p m) () (Record PureOperand p)
+askPlaceholders = queryA $ \() -> Monadic.askPlaceholders
 
 {-# DEPRECATED derivedUpdate' "use `update'` instead of this." #-}
 -- | Same as 'Monadic.update''.
