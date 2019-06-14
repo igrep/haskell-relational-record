@@ -58,7 +58,7 @@ import Database.Relational.SqlSyntax
    PlaceholderOffsets, WithPlaceholderOffsets, SQLWithPlaceholderOffsets, SQLWithPlaceholderOffsets',
    SubQuery, unitSQL, queryWidth,
    withPlaceholderOffsets, attachEmptyPlaceholderOffsets, detachPlaceholderOffsets, sortByPlaceholderOffsets, placeholderOffsets, )
-import Database.Relational.Record (RecordList, list, pempty, toFlat, toAggregated)
+import Database.Relational.Record (RecordList, list, pempty, toFlat, toAggregated, toSomeOperatorContext,)
 import Database.Relational.ProjectableClass
 import Database.Relational.Projectable
 import Database.Relational.TupleInstances
