@@ -9,7 +9,7 @@
 module Test.Relational.QuickCheck.Placeholders.Types where
 
 import Data.Int (Int64)
-import Dragen (dragenArbitrary, uniform)
+import Dragen (dragenArbitrary, uniform, weighted)
 import Database.Relational
 
 import Test.Relational.QuickCheck.Placeholders.Model
@@ -47,8 +47,8 @@ data VarExpr c
 type VarExprFlat = VarExpr Flat
 type VarExprAggregated = VarExpr Aggregated
 
-$(dragenArbitrary ''VarExprFlat 3 uniform)
-$(dragenArbitrary ''VarExprAggregated 3 uniform)
+$(dragenArbitrary ''VarExprFlat 2 $ weighted [('Column, 2), ('Placeholder, 4), ('VLeft, 1), ('VRight, 1)])
+$(dragenArbitrary ''VarExprAggregated 2 $ weighted [('Column, 2), ('Placeholder, 4), ('VLeft, 1), ('VRight, 1)])
 
 instance Show (VarExpr c) where
   show Column = "tb ! col"
@@ -65,8 +65,8 @@ data Expr c
 type ExprFlat = Expr Flat
 type ExprAggregated = Expr Aggregated
 
-$(dragenArbitrary ''ExprFlat 3 uniform)
-$(dragenArbitrary ''ExprAggregated 3 uniform)
+$(dragenArbitrary ''ExprFlat 2 $ weighted [('Var, 4), ('(:+:), 1), ('(:-:), 1)])
+$(dragenArbitrary ''ExprAggregated 2 $ weighted [('Var, 4), ('(:+:), 1), ('(:-:), 1)])
 
 instance Show (Expr c) where
   show (Var ve) = show ve
@@ -107,8 +107,8 @@ data Pred c
 type PredFlat = Pred Flat
 type PredAggregated = Pred Aggregated
 
-$(dragenArbitrary ''PredFlat 3 uniform)
-$(dragenArbitrary ''PredAggregated 3 uniform)
+$(dragenArbitrary ''PredFlat 2 $ weighted [('PTerm, 2), ('Not, 1), ('(:&:), 1), ('(:|:), 1)])
+$(dragenArbitrary ''PredAggregated 2 $ weighted [('PTerm, 2), ('Not, 1), ('(:&:), 1), ('(:|:), 1)])
 
 instance Show (Pred c) where
   show (PTerm t) = show t
