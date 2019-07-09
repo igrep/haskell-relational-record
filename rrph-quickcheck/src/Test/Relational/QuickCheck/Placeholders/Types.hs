@@ -6,6 +6,19 @@
 -- dragenArbitrary defines unused argument when definining (Arbitrary Flat) and (Arbitrary Aggregated)
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 
+-- | Provides types to convert into HRR statements (e.g. 'wheres', 'query'' etc.),
+--   plus their 'Arbitrary' instances.
+--
+--   Some of the types are originally written in 'Test.Relational.QuickCheck.Arbitrary'
+--   module, and I rewrote their 'Show' instances to print them like actually executed
+--   HRR statements.
+--
+--   The parameters of 'dragenArbitrary' is configured empirically: I found the instances
+--   defined by those parameters generate moderately deep trees, and don't take too
+--   long time to finish the tests, according to several experiments.
+--
+--   This module is separated because it's compiled very slowly due to 'dragenArbitrary'.
+
 module Test.Relational.QuickCheck.Placeholders.Types where
 
 import Data.Int (Int64)

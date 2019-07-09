@@ -57,6 +57,22 @@ import Test.QuickCheck.Gen (Gen (MkGen))
 import Test.Relational.QuickCheck.Placeholders.Model
 import Test.Relational.QuickCheck.Placeholders.Types
 
+-- | Manages available arguments used when converting generated 'Pred' or 'Expr'
+--   values into HRR statements (e.g. 'wheres', 'groupBy' etc.).
+--
+--   To generate (almost) arbitrary monadic action like HRR statements,
+--   the arguments passed to the generated functions also have to be generated.
+--   In HRR expressions, available arguments should be added by the preceding
+--   actions to accurately simulate the actual usage of HRR.
+--   For example, 'wheres' function should contain a `Record` value returned by
+--   'query' in its argument (either directly or indirectly).
+--
+--   In addition, to test the placeholder feature as intended,
+--   Generated placeholders are referred by a certain order so that
+--   we can compare the actually referred placeholders and expected placeholders.
+--   To satisfy the requirement, I made generated placeholders "popped" every time
+--   referred by the generated expressions.
+--   See 'popPlaceholder', 'cyclePhSelectors' and their usages for details.
 type GenFromInputT m = GenT (StateT Input m)
 
 data Input = Input
