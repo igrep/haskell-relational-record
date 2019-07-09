@@ -65,7 +65,7 @@ join' = lift
 -- | Unsafely update join product context.
 updateContext :: Monad m => PlaceholderOffsets -> (JoinContext -> JoinContext) -> QueryJoin m ()
 updateContext phs f =
-  QueryJoin $ modify (mapWithPlaceholderOffsets (f *** (phs <>)))
+  QueryJoin $ modify (mapWithPlaceholderOffsets (f *** (<> phs)))
 
 -- | Add last join product restriction.
 updateJoinRestriction :: Monad m => Predicate Flat -> QueryJoin m ()

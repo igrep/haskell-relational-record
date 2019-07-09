@@ -26,6 +26,7 @@ module Database.Relational.Monad.BaseType
        ) where
 
 import Data.Functor.Identity (Identity, runIdentity)
+import Data.Foldable (toList)
 import Data.DList (fromList)
 import Control.Arrow ((&&&))
 
@@ -34,7 +35,7 @@ import Database.Record.Persistable
 import Database.Relational.Projectable.Unsafe (unsafeProjectSqlTermsWithPlaceholders)
 import Database.Relational.Projectable.Instances ()
 
-import Database.Relational.Internal.String (showStringSQL)
+import Database.Relational.Internal.String (showStringSQL, stringSQL)
 import Database.Relational.Internal.Config (Config, defaultConfig)
 import Database.Relational.Internal.ContextType (PureOperand)
 import Database.Relational.SqlSyntax
@@ -101,13 +102,17 @@ dump =  show . (`configureQuery` defaultConfig) . (`untypeRelation` defaultPlace
 instance PersistableWidth p => Show (Relation p r) where
   show = showStringSQL . detachPlaceholderOffsets . (`sqlFromRelation` defaultPlaceholders)
 
+-- igrep TODO: This should be marked as "unsafe": Can make a `Relation () a` receive Placeholder against its actual argument.
 defaultPlaceholders :: PersistableWidth t => Record PureOperand t
 defaultPlaceholders = pwPlaceholders persistableWidth
 
 pwPlaceholders :: PersistableRecordWidth a
                -> Record PureOperand a
 pwPlaceholders pw =
-  unsafeProjectSqlTermsWithPlaceholders . withPlaceholderOffsets phs $ replicate w "?"
+  unsafeProjectSqlTermsWithPlaceholders
+    . withPlaceholderOffsets phs
+    . map (\i -> stringSQL $ "?" <> "/* " <> show i <>  " */")
+    $ toList phs
  where
   w = runPersistableRecordWidth pw
   phs = fromList [0 .. (w - 1)]
